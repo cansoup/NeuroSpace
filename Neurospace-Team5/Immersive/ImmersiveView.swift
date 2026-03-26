@@ -15,17 +15,21 @@ struct ImmersiveView: View {
             let root = Entity()
             root.name = "Root"
 
-            let anchor = AnchorEntity(.head)
-            anchor.position = [0.0, 0.0, -1.2]
+            // Place bubble field at eye level, 1.2m in front in world space
+            let anchor = AnchorEntity(world: SIMD3<Float>(0, 1.5, -1.2))
 
             let armMesh = MeshResource.generateCylinder(height: 0.24, radius: 0.025)
-            let armMaterial = SimpleMaterial()
+            var armMaterial = PhysicallyBasedMaterial()
+            armMaterial.baseColor = .init(tint: .white.withAlphaComponent(0.6))
+            armMaterial.roughness = .init(floatLiteral: 0.4)
             let arm = ModelEntity(mesh: armMesh, materials: [armMaterial])
             arm.name = "Arm"
             arm.position = appModel.gameController.armState.armBasePosition
 
             let tipMesh = MeshResource.generateSphere(radius: 0.025)
-            let tipMaterial = SimpleMaterial()
+            var tipMaterial = PhysicallyBasedMaterial()
+            tipMaterial.baseColor = .init(tint: .cyan.withAlphaComponent(0.9))
+            tipMaterial.roughness = .init(floatLiteral: 0.2)
             let tip = ModelEntity(mesh: tipMesh, materials: [tipMaterial])
             tip.name = "PointerTip"
             tip.position = appModel.gameController.armState.pointerPosition
@@ -65,8 +69,11 @@ struct ImmersiveView: View {
     }
 
     private func makeBubbleEntity(for bubble: Bubble) -> ModelEntity {
-        let mesh = MeshResource.generateSphere(radius: 0.05)
-        let material = SimpleMaterial()
+        let mesh = MeshResource.generateSphere(radius: 0.06)
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: .purple.withAlphaComponent(0.55))
+        material.roughness = .init(floatLiteral: 0.1)
+        material.metallic = .init(floatLiteral: 0.0)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.name = bubbleEntityName(for: bubble.id)
         entity.position = bubble.position
@@ -91,7 +98,7 @@ struct ImmersiveView: View {
     }
 }
 
-#Preview(immersionStyle: .full) {
+#Preview(immersionStyle: .mixed) {
     ImmersiveView()
         .environment(AppModel())
 }

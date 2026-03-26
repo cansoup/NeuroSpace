@@ -15,7 +15,7 @@ struct ContentView: View {
             switch controller.sessionState {
             case .playing, .paused:
                 GameView()
-                    .frame(minWidth: 1100, minHeight: 650)
+                    .frame(minWidth: 240, minHeight: 120)
             default:
                 LobbyView()
                     .frame(minWidth: 520, minHeight: 380)
