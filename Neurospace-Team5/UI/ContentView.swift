@@ -11,16 +11,8 @@ struct ContentView: View {
     private var controller: BubbleGameController { appModel.gameController }
 
     var body: some View {
-        Group {
-            switch controller.sessionState {
-            case .playing, .paused:
-                GameView()
-                    .frame(minWidth: 240, minHeight: 120)
-            default:
-                LobbyView()
-                    .frame(minWidth: 520, minHeight: 380)
-            }
-        }
+        LobbyView()
+            .frame(minWidth: 520, minHeight: 380)
     }
 }
 
@@ -29,6 +21,7 @@ struct ContentView: View {
 struct LobbyView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.dismissWindow) private var dismissWindow
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -101,7 +94,7 @@ struct LobbyView: View {
                         appModel.immersiveSpaceState = .inTransition
                         switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                         case .opened:
-                            break
+                            dismissWindow(id: appModel.mainWindowID)
                         case .userCancelled, .error:
                             fallthrough
                         @unknown default:

@@ -11,7 +11,7 @@ struct ImmersiveView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             let root = Entity()
             root.name = "Root"
 
@@ -45,7 +45,13 @@ struct ImmersiveView: View {
             anchor.addChild(root)
             content.add(anchor)
 
-        } update: { content in
+            // Attach control panel — top-right of the bubble field
+            if let panel = attachments.entity(for: "controlPanel") {
+                panel.position = SIMD3<Float>(0.55, 0.45, -1.0)
+                content.add(panel)
+            }
+
+        } update: { content, attachments in
 
             let deltaTime: Float = 1.0 / 60.0
             appModel.gameController.update(deltaTime: deltaTime)
@@ -65,6 +71,12 @@ struct ImmersiveView: View {
             tip.position = controller.armState.pointerPosition
 
             syncBubbles(in: root, with: controller.bubbles)
+
+        } attachments: {
+            Attachment(id: "controlPanel") {
+                GameControlPanel()
+                    .environment(appModel)
+            }
         }
     }
 
