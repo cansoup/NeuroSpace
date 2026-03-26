@@ -20,6 +20,13 @@ final class BubbleGameController {
     var bubbles: [Bubble] = []
     var score: Int = 0
 
+    // UI state
+    var currentStage: Int = 1
+    var targetBubbleColor: String = "Pink"
+    var accuracy: Double = 0.0
+    private var hitCount: Int = 0
+    private var attemptCount: Int = 0
+
     private var velocityX: Float = 0.0
     private var targetDirection: Float = 0.0
 
@@ -68,7 +75,7 @@ final class BubbleGameController {
             targetDirection = 1.0
         case .idle:
             targetDirection = 0.0
-        case .moveUp, .moveDown, .pop:
+        case .moveForward, .moveBackward, .pop:
             break
         }
     }
@@ -103,9 +110,14 @@ final class BubbleGameController {
             if bubbles[i].isPopped { continue }
 
             let distance = abs(bubbles[i].position.x - armState.pointerPosition.x)
+            attemptCount += 1
             if distance < 0.08 {
                 bubbles[i].isPopped = true
-                score += 1
+                score += 100
+                hitCount += 1
+            }
+            if attemptCount > 0 {
+                accuracy = Double(hitCount) / Double(attemptCount)
             }
         }
     }
