@@ -6,11 +6,34 @@
 //
 
 
+//
+//  ArmState.swift
+//  Neurospace-Team5
+//
+
 import Foundation
 import simd
 
+enum ActiveArm: String, Codable, CaseIterable {
+    case left
+    case right
+}
+
 struct ArmState: Equatable {
-    var pointerPosition: SIMD3<Float> = [0.0, 0.0, 0.0]
-    var armBasePosition: SIMD3<Float> = [0.0, -0.08, 0.0]
+    var basePosition: SIMD3<Float>
+    var tipPosition: SIMD3<Float>
+    var velocity: SIMD3<Float>
     var isPopTriggered: Bool = false
+
+    init(
+        basePosition: SIMD3<Float> = .zero,
+        tipPosition: SIMD3<Float> = .zero,
+        velocity: SIMD3<Float> = .zero,
+        isPopTriggered: Bool = false
+    ) {
+        self.basePosition = basePosition
+        self.tipPosition = tipPosition
+        self.velocity = velocity
+        self.isPopTriggered = isPopTriggered
+    }
 }

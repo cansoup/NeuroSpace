@@ -11,6 +11,8 @@ enum BCIIntent: String, Codable, CaseIterable {
     case idle
     case moveLeft
     case moveRight
+    case moveUp
+    case moveDown
     case moveForward
     case moveBackward
     case pop

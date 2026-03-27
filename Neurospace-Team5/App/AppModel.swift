@@ -12,6 +12,7 @@ import Observation
 @Observable
 final class AppModel {
     let immersiveSpaceID = "ImmersiveSpace"
+    let mainWindowID = "main"
 
     enum ImmersiveSpaceState {
         case closed
@@ -21,4 +22,5 @@ final class AppModel {
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
     var gameController = BubbleGameController()
+    var shouldEndSession: Bool = false
 }
