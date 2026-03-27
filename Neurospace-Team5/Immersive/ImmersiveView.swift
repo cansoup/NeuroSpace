@@ -58,15 +58,6 @@ struct ImmersiveView: View {
                 content.add(panelAnchor)
             }
 
-            // Stop alert — world-fixed, centered, hidden by default
-            if let alert = attachments.entity(for: "stopAlert") {
-                alert.name = "StopAlert"
-                alert.isEnabled = false
-                let alertAnchor = AnchorEntity(world: SIMD3<Float>(0, 0, -1.0))
-                alertAnchor.name = "StopAlertAnchor"
-                alertAnchor.addChild(alert)
-                content.add(alertAnchor)
-            }
 
         } update: { content, _ in
 
@@ -84,19 +75,9 @@ struct ImmersiveView: View {
             tip.position = controller.armState.pointerPosition
             syncBubbles(in: root, with: controller.bubbles)
 
-            // Toggle stop alert
-            if let alertAnchor = content.entities.first(where: { $0.name == "StopAlertAnchor" }),
-               let alert = alertAnchor.findEntity(named: "StopAlert") {
-                alert.isEnabled = appModel.showStopAlert
-            }
-
         } attachments: {
             Attachment(id: "controlPanel") {
                 GameControlPanel()
-                    .environment(appModel)
-            }
-            Attachment(id: "stopAlert") {
-                StopAlertPanel()
                     .environment(appModel)
             }
         }

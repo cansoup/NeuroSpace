@@ -5,10 +5,11 @@
 
 import SwiftUI
 
-// MARK: - Compact Control Panel (rendered as RealityKit attachment in ImmersiveView)
+// MARK: - Compact Control Panel (RealityKit attachment)
 
 struct GameControlPanel: View {
     @Environment(AppModel.self) private var appModel
+    @State private var confirmingStop = false
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -29,108 +30,95 @@ struct GameControlPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            // EEG status + Stop
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(eegColor)
-                    .frame(width: 8, height: 8)
-                Text(controller.connectionState.displayText)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    appModel.showStopAlert = true
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(.red, in: RoundedRectangle(cornerRadius: 7))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            Divider().opacity(0.3)
-
-            // Score + Timer
-            HStack(spacing: 20) {
-                VStack(spacing: 2) {
-                    Text(timeString)
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
-                        .foregroundStyle(isLowTime ? .red : .primary)
-                        .animation(.easeInOut(duration: 0.3), value: isLowTime)
-                    Text("TIME")
-                        .font(.system(size: 9, weight: .semibold))
+        VStack(spacing: 0) {
+            if confirmingStop {
+                // Stop confirmation
+                VStack(spacing: 16) {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.red)
+                    Text("End Session?")
+                        .font(.system(size: 18, weight: .bold))
+                    Text("Your current progress will be lost.")
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
-                        .tracking(1)
+                        .multilineTextAlignment(.center)
+
+                    HStack(spacing: 12) {
+                        Button("Cancel") {
+                            confirmingStop = false
+                        }
+                        .controlSize(.large)
+
+                        Button("End Session") {
+                            confirmingStop = false
+                            appModel.shouldEndSession = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .controlSize(.large)
+                    }
                 }
+                .padding(28)
+                .frame(width: 300)
 
-                Divider()
-                    .frame(height: 30)
-                    .opacity(0.3)
-
-                VStack(spacing: 2) {
-                    Text("\(controller.score)")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .contentTransition(.numericText())
-                        .animation(.spring(duration: 0.3), value: controller.score)
-                    Text("SCORE")
-                        .font(.system(size: 9, weight: .semibold))
+            } else {
+                // Normal panel
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(eegColor)
+                        .frame(width: 8, height: 8)
+                    Text(controller.connectionState.displayText)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
-                        .tracking(1)
+                    Spacer()
+                    Button {
+                        confirmingStop = true
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 26, height: 26)
+                            .background(.red, in: RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.borderless)
                 }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-        .frame(width: 200)
-        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
-// MARK: - Stop Alert Panel (centered RealityKit attachment)
+                Divider().opacity(0.3)
 
-struct StopAlertPanel: View {
-    @Environment(AppModel.self) private var appModel
+                HStack(spacing: 20) {
+                    VStack(spacing: 2) {
+                        Text(timeString)
+                            .font(.system(size: 20, weight: .bold, design: .monospaced))
+                            .foregroundStyle(isLowTime ? .red : .primary)
+                            .animation(.easeInOut(duration: 0.3), value: isLowTime)
+                        Text("TIME")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1)
+                    }
 
-    var body: some View {
-        VStack(spacing: 20) {
-            VStack(spacing: 8) {
-                Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.red)
-                Text("End Session?")
-                    .font(.system(size: 20, weight: .bold))
-                Text("Your current progress will be lost.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+                    Divider().frame(height: 30).opacity(0.3)
 
-            HStack(spacing: 12) {
-                Button("Cancel") {
-                    appModel.showStopAlert = false
+                    VStack(spacing: 2) {
+                        Text("\(controller.score)")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .contentTransition(.numericText())
+                            .animation(.spring(duration: 0.3), value: controller.score)
+                        Text("SCORE")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-
-                Button("End Session") {
-                    appModel.showStopAlert = false
-                    appModel.shouldEndSession = true
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .controlSize(.large)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(width: 200)
             }
         }
-        .padding(32)
-        .frame(width: 320)
-        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }

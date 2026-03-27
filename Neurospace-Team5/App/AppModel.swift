@@ -22,6 +22,5 @@ final class AppModel {
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
     var gameController = BubbleGameController()
-    var showStopAlert: Bool = false
     var shouldEndSession: Bool = false
 }
