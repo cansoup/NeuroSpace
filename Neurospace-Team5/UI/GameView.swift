@@ -81,7 +81,7 @@ struct GameControlPanel: View {
                             .frame(width: 26, height: 26)
                             .background(.red, in: RoundedRectangle(cornerRadius: 7))
                     }
-                    .buttonStyle(.borderless)
+                    .hoverEffect()
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
