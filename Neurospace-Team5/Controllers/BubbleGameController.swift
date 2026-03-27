@@ -27,6 +27,11 @@ final class BubbleGameController {
     private var hitCount: Int = 0
     private var attemptCount: Int = 0
 
+    // Timer
+    static let stageDuration: Int = 120   // 2 minutes per stage
+    var remainingSeconds: Int = stageDuration
+    private var accumulatedTime: Float = 0.0
+
     private var velocityX: Float = 0.0
     private var targetDirection: Float = 0.0
 
@@ -43,6 +48,8 @@ final class BubbleGameController {
         currentIntent = .idle
         sessionState = .ready
         score = 0
+        remainingSeconds = BubbleGameController.stageDuration
+        accumulatedTime = 0.0
 
         velocityX = 0.0
         targetDirection = 0.0
@@ -81,7 +88,20 @@ final class BubbleGameController {
     }
 
     func update(deltaTime: Float) {
-        guard sessionState == .playing || sessionState == .ready else { return }
+        guard sessionState == .playing else { return }
+
+        // Countdown timer
+        accumulatedTime += deltaTime
+        if accumulatedTime >= 1.0 {
+            accumulatedTime -= 1.0
+            if remainingSeconds > 0 {
+                remainingSeconds -= 1
+            }
+            if remainingSeconds == 0 {
+                sessionState = .finished
+                return
+            }
+        }
 
         let targetVelocity = targetDirection * maxSpeed
 

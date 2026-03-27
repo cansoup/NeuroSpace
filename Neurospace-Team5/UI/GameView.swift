@@ -11,16 +11,16 @@ struct GameControlPanel: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
-    @State private var elapsedSeconds: Int = 0
     @State private var showStopConfirm = false
 
     private var controller: BubbleGameController { appModel.gameController }
 
     private var timeString: String {
-        let m = elapsedSeconds / 60
-        let s = elapsedSeconds % 60
-        return String(format: "%02d:%02d", m, s)
+        let t = controller.remainingSeconds
+        return String(format: "%02d:%02d", t / 60, t % 60)
     }
+
+    private var isLowTime: Bool { controller.remainingSeconds <= 30 }
 
     private var eegColor: Color {
         switch controller.connectionState {
@@ -79,6 +79,8 @@ struct GameControlPanel: View {
                 VStack(spacing: 2) {
                     Text(timeString)
                         .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .foregroundStyle(isLowTime ? .red : .primary)
+                        .animation(.easeInOut(duration: 0.3), value: isLowTime)
                     Text("TIME")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -105,13 +107,5 @@ struct GameControlPanel: View {
         }
         .frame(width: 200)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if controller.sessionState == .playing {
-                    elapsedSeconds += 1
-                }
-            }
-        }
     }
 }
