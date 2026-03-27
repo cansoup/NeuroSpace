@@ -54,23 +54,43 @@ struct GameControlPanel: View {
                         .background(.red, in: RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .confirmationDialog("Stop Session?", isPresented: $showStopConfirm, titleVisibility: .visible) {
-                    Button("Stop", role: .destructive) {
-                        Task { @MainActor in
-                            controller.resetGame()
-                            if appModel.immersiveSpaceState == .open {
-                                appModel.immersiveSpaceState = .inTransition
-                                await dismissImmersiveSpace()
-                            }
-                            openWindow(id: appModel.mainWindowID)
-                        }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 12)
             .padding(.bottom, 8)
+
+            // Inline stop confirmation
+            if showStopConfirm {
+                Divider().opacity(0.3)
+                VStack(spacing: 8) {
+                    Text("Stop session?")
+                        .font(.system(size: 12, weight: .semibold))
+                    HStack(spacing: 8) {
+                        Button("Cancel") {
+                            showStopConfirm = false
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button("Stop") {
+                            showStopConfirm = false
+                            Task { @MainActor in
+                                controller.resetGame()
+                                if appModel.immersiveSpaceState == .open {
+                                    appModel.immersiveSpaceState = .inTransition
+                                    await dismissImmersiveSpace()
+                                }
+                                openWindow(id: appModel.mainWindowID)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
 
             Divider().opacity(0.3)
 
