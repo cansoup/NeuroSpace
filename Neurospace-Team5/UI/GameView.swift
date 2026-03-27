@@ -10,6 +10,7 @@ import SwiftUI
 struct CongratsView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
@@ -22,24 +23,51 @@ struct CongratsView: View {
             VStack(spacing: 8) {
                 Text("Congratulations!")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("You popped all the bubbles!")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.secondary)
+                let controller = appModel.gameController
+                if controller.isOnFinalStage {
+                    Text("You completed all stages!")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Stage \(controller.currentStage) cleared! Ready for Stage \(controller.currentStage + 1)?")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
 
             Text("Score: \(appModel.gameController.score)")
                 .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .foregroundStyle(.purple)
 
-            Button("OK") {
+            Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
                 Task { @MainActor in
                     dismiss()
-                    appModel.gameController.resetGame()
-                    if appModel.immersiveSpaceState == .open {
-                        appModel.immersiveSpaceState = .inTransition
-                        await dismissImmersiveSpace()
+                    let willAdvance = appModel.gameController.canAdvanceStage
+                    appModel.gameController.advanceStage()
+
+                    if willAdvance {
+                        // Continue in immersive space with the next stage
+                        if appModel.immersiveSpaceState != .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+                                appModel.gameController.startSession()
+                            } else {
+                                appModel.immersiveSpaceState = .closed
+                                openWindow(id: appModel.mainWindowID)
+                            }
+                        } else {
+                            appModel.gameController.startSession()
+                        }
+                    } else {
+                        // Final stage cleared — return to lobby
+                        appModel.gameController.resetGame()
+                        if appModel.immersiveSpaceState == .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            await dismissImmersiveSpace()
+                        }
+                        openWindow(id: appModel.mainWindowID)
                     }
-                    openWindow(id: appModel.mainWindowID)
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -95,7 +123,7 @@ struct MissionFailedView: View {
                 Button("Try Again") {
                     Task { @MainActor in
                         dismiss()
-                        appModel.gameController.resetGame()
+                        appModel.gameController.resetGame(keepStage: true)
                         if appModel.immersiveSpaceState != .open {
                             appModel.immersiveSpaceState = .inTransition
                             if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {

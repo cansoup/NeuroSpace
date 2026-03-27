@@ -67,6 +67,118 @@ Neurospace-Team5/
 
 ---
 
+## Rehabilitation Stage Design
+
+Neurospace structures gameplay into five progressive stages grounded in motor imagery rehabilitation for upper-limb amputees. The core mechanism is **Motor Imagery (MI)**: repeatedly imagining a limb movement preserves cortical representation, improves EEG signal quality, and builds the neural foundation for future BCI-controlled prosthetic use.
+
+### Design Principles
+
+- **Simple → Complex**: single axis → 2D plane → full 3D
+- **Unilateral → Bilateral**: one active arm → hemispheric switching
+- **Static → Dynamic**: fixed targets → moving, time-limited targets
+- **Scaffolded progression**: each stage unlocks only when performance criteria are met
+
+---
+
+### Stage 1 — Signal Discovery
+
+| Parameter | Value |
+|---|---|
+| Axes | X only (left / right) |
+| Bubbles | 3 × large (radius 0.12 m) |
+| Arm mode | Single active |
+| Duration | 3 min |
+| Unlock | ≥ 70% accuracy & all 3 popped |
+
+Large targets and restricted movement minimise frustration during the first BCI interaction. The patient discovers which mental strategy (pushing, rotating, squeezing imagery) produces the strongest and most consistent EEG signal.
+
+**Clinical rationale:** Establishes the patient's individual signal profile. Success on the first contact builds neurological confidence and lays the foundation for cortical map preservation.
+
+---
+
+### Stage 2 — Spatial Mapping
+
+| Parameter | Value |
+|---|---|
+| Axes | X + Y (left / right + up / down) |
+| Bubbles | 6 × medium (radius 0.09 m) |
+| Arm mode | Single active |
+| Duration | 2 min 30 s |
+| Unlock | ≥ 70% accuracy & all 6 popped |
+
+Bubbles are arranged in a grid-like pattern in the frontal plane, providing clear spatial scaffolding. The vertical axis engages a distinct cortical region from the horizontal axis, broadening the motor imagery vocabulary.
+
+**Clinical rationale:** Expanding to 2-D builds a richer set of decodable EEG patterns, directly increasing the degrees of freedom available for future prosthetic control.
+
+---
+
+### Stage 3 — Depth Perception
+
+| Parameter | Value |
+|---|---|
+| Axes | X + Y + Z (full 3-D) |
+| Bubbles | 8 × standard (radius 0.06 m) |
+| Arm mode | Single active |
+| Duration | 2 min |
+| Unlock | ≥ 75% accuracy & ≥ 6 popped |
+
+Bubbles are placed at varying depths, requiring combined intent (e.g. right + forward simultaneously). This mirrors the spatial complexity of real reach-and-grasp scenarios used in ADL (activities of daily living).
+
+**Clinical rationale:** Full 3-D spatial navigation demands predictive motor planning — a higher cognitive-motor integration skill that directly predicts prosthetic usability in daily life.
+
+---
+
+### Stage 4 — Bilateral Coordination
+
+| Parameter | Value |
+|---|---|
+| Axes | Full 3-D |
+| Bubbles | 10 (5 cyan = left arm, 5 orange = right arm) |
+| Arm mode | Bilateral (colour-coded assignment) |
+| Duration | 2 min |
+| Unlock | ≥ 80% accuracy & ≥ 8 popped |
+
+Each bubble is colour-coded to a specific arm. The player must switch the active arm by BCI intent to match the target. Popping with the wrong arm yields no score.
+
+**Clinical rationale:** Most ADL require bimanual coordination. Rapidly alternating between left and right motor imagery trains interhemispheric inhibition circuits — the neural basis of two-handed prosthetic use.
+
+---
+
+### Stage 5 — Dynamic Flow
+
+| Parameter | Value |
+|---|---|
+| Axes | Full 3-D |
+| Bubbles | Continuous respawn batches (radius 0.06 m) |
+| Arm mode | Bilateral |
+| Duration | 2 min |
+| Bubble lifetime | 12 s (expires without scoring) |
+| Speed | 0.02 – 0.05 m/s (random drift) |
+
+Bubbles drift slowly and disappear if not popped in time. The session ends only when the timer reaches zero, with continuous respawning. This stage exercises **predictive motor planning** — moving targets cannot be handled by purely reactive control.
+
+**Clinical rationale:** Real-world motor tasks are never static. This stage is the closest simulation of functional prosthetic use: dynamic targets, time pressure, bilateral arm switching, and full 3-D navigation — all simultaneously.
+
+---
+
+### Progression Criteria Summary
+
+| Stage | Unlock condition |
+|---|---|
+| 1 → 2 | ≥ 70% accuracy · all 3 bubbles popped |
+| 2 → 3 | ≥ 70% accuracy · all 6 bubbles popped |
+| 3 → 4 | ≥ 75% accuracy · ≥ 6 bubbles popped |
+| 4 → 5 | ≥ 80% accuracy · ≥ 8 bubbles popped |
+| 5 | Final stage — session ends by timer |
+
+### Additional Clinical Considerations
+
+- **Mental fatigue**: BCI motor imagery causes significant cognitive load; signal quality degrades after 10–15 min. Rest screens between stages are recommended.
+- **Phantom limb pain relief**: The combination of motor imagery and real-time visual feedback activates mirror neuron circuits, which may reduce phantom limb pain — a documented side-benefit of AR-based MI training.
+- **Therapist monitoring**: Per-stage accuracy, response latency, and session scores should be logged and surfaced in a clinician dashboard for progress tracking.
+
+---
+
 ## BCI Intent Mapping
 
 | Intent | Movement |
