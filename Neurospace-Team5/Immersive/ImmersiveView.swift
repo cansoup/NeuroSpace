@@ -20,12 +20,13 @@ struct ImmersiveView: View {
 
     var body: some View {
         RealityView { content, attachments in
-            let headAnchor = AnchorEntity(.head)
-            headAnchor.name = "HeadAnchor"
+            // World anchor: fixed in real-world space at eye level, 1.2 m in front of origin
+            let worldAnchor = AnchorEntity(world: SIMD3<Float>(0, 1.5, -1.2))
+            worldAnchor.name = "WorldAnchor"
 
             let root = Entity()
             root.name = "Root"
-            root.position = SIMD3<Float>(0, 0, -1.2)
+            root.position = .zero
 
             // Left arm
             let leftArm = makeArmBodyEntity(
@@ -56,20 +57,20 @@ struct ImmersiveView: View {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
 
-            headAnchor.addChild(root)
+            worldAnchor.addChild(root)
 
             if let panel = attachments.entity(for: "controlPanel") {
                 panel.name = "ControlPanel"
-                panel.position = SIMD3<Float>(0.45, 0.15, -1.2)
-                headAnchor.addChild(panel)
+                panel.position = SIMD3<Float>(0.55, 0.25, 0)
+                worldAnchor.addChild(panel)
             }
 
-            content.add(headAnchor)
+            content.add(worldAnchor)
 
         } update: { content, _ in
             guard
-                let headAnchor = content.entities.first(where: { $0.name == "HeadAnchor" }),
-                let root = headAnchor.findEntity(named: "Root"),
+                let worldAnchor = content.entities.first(where: { $0.name == "WorldAnchor" }),
+                let root = worldAnchor.findEntity(named: "Root"),
                 let leftArmBody = root.findEntity(named: "LeftArmBody") as? ModelEntity,
                 let leftTip = root.findEntity(named: "LeftArmTip") as? ModelEntity,
                 let rightArmBody = root.findEntity(named: "RightArmBody") as? ModelEntity,
@@ -100,6 +101,22 @@ struct ImmersiveView: View {
                 GameControlPanel()
                     .environment(appModel)
             }
+        }
+        .gesture(
+            SpatialTapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in
+                    let name = value.entity.name
+                    guard name.hasPrefix("Bubble_") else { return }
+                    let uuidString = String(name.dropFirst("Bubble_".count))
+                    guard let id = UUID(uuidString: uuidString) else { return }
+                    appModel.gameController.popBubble(withID: id)
+                }
+        )
+        .onChange(of: appModel.gameController.sessionState) { _, newState in
+            guard newState == .finished,
+                  appModel.gameController.bubbles.allSatisfy(\.isPopped) else { return }
+            openWindow(id: appModel.congratsWindowID)
         }
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
@@ -184,6 +201,8 @@ struct ImmersiveView: View {
         )
         entity.name = "Bubble_\(bubble.id.uuidString)"
         entity.position = bubble.position
+        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.06)]))
+        entity.components.set(InputTargetComponent())
         return entity
     }
 

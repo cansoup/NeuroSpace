@@ -13,6 +13,7 @@ import Observation
 final class AppModel {
     let immersiveSpaceID = "ImmersiveSpace"
     let mainWindowID = "main"
+    let congratsWindowID = "congrats"
 
     enum ImmersiveSpaceState {
         case closed

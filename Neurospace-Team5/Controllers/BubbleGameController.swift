@@ -230,6 +230,22 @@ final class BubbleGameController {
         return positions.map { Bubble(position: $0) }
     }
 
+    func popBubble(withID id: UUID) {
+        guard sessionState == .playing else { return }
+        guard let idx = bubbles.firstIndex(where: { $0.id == id }),
+              !bubbles[idx].isPopped else { return }
+
+        bubbles[idx].isPopped = true
+        score += 100
+        hitCount += 1
+        attemptCount += 1
+        accuracy = Double(hitCount) / Double(attemptCount)
+
+        if bubbles.allSatisfy(\.isPopped) {
+            sessionState = .finished
+        }
+    }
+
     private func autoPopIfTouching() {
         for i in bubbles.indices {
             if bubbles[i].isPopped { continue }
