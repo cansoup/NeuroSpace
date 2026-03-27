@@ -9,6 +9,8 @@ import RealityKit
 
 struct ImmersiveView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         RealityView { content, attachments in
@@ -98,6 +100,18 @@ struct ImmersiveView: View {
             Attachment(id: "stopAlert") {
                 StopAlertPanel()
                     .environment(appModel)
+            }
+        }
+        .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
+            guard shouldEnd else { return }
+            appModel.shouldEndSession = false
+            Task { @MainActor in
+                appModel.gameController.resetGame()
+                if appModel.immersiveSpaceState == .open {
+                    appModel.immersiveSpaceState = .inTransition
+                    await dismissImmersiveSpace()
+                }
+                openWindow(id: appModel.mainWindowID)
             }
         }
     }

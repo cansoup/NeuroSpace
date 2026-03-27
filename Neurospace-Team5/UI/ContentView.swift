@@ -89,7 +89,7 @@ struct LobbyView: View {
             // Start game
             Button {
                 Task { @MainActor in
-                    controller.sessionState = .playing
+                    controller.startSession()
                     if appModel.immersiveSpaceState == .closed {
                         appModel.immersiveSpaceState = .inTransition
                         switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {

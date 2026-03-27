@@ -98,10 +98,6 @@ struct GameControlPanel: View {
 
 struct StopAlertPanel: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-    @Environment(\.openWindow) private var openWindow
-
-    private var controller: BubbleGameController { appModel.gameController }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -126,14 +122,7 @@ struct StopAlertPanel: View {
 
                 Button("End Session") {
                     appModel.showStopAlert = false
-                    Task { @MainActor in
-                        controller.resetGame()
-                        if appModel.immersiveSpaceState == .open {
-                            appModel.immersiveSpaceState = .inTransition
-                            await dismissImmersiveSpace()
-                        }
-                        openWindow(id: appModel.mainWindowID)
-                    }
+                    appModel.shouldEndSession = true
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)

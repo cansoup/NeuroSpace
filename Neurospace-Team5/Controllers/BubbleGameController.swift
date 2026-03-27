@@ -27,10 +27,10 @@ final class BubbleGameController {
     private var hitCount: Int = 0
     private var attemptCount: Int = 0
 
-    // Timer
-    static let stageDuration: Int = 120   // 2 minutes per stage
+    // Timer — driven by an independent async Task, not the render loop
+    static let stageDuration: Int = 120
     var remainingSeconds: Int = stageDuration
-    private var sessionStartDate: Date? = nil
+    private var timerTask: Task<Void, Never>? = nil
 
     private var velocityX: Float = 0.0
     private var targetDirection: Float = 0.0
@@ -44,12 +44,36 @@ final class BubbleGameController {
         resetGame()
     }
 
+    func startSession() {
+        sessionState = .playing
+        remainingSeconds = BubbleGameController.stageDuration
+        timerTask?.cancel()
+        let start = Date()
+        timerTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, self.sessionState == .playing else { break }
+                let elapsed = Int(Date().timeIntervalSince(start))
+                self.remainingSeconds = max(0, BubbleGameController.stageDuration - elapsed)
+                if self.remainingSeconds == 0 {
+                    self.sessionState = .finished
+                    break
+                }
+            }
+        }
+    }
+
     func resetGame() {
+        timerTask?.cancel()
+        timerTask = nil
+
         currentIntent = .idle
         sessionState = .ready
         score = 0
         remainingSeconds = BubbleGameController.stageDuration
-        sessionStartDate = nil
+        hitCount = 0
+        attemptCount = 0
+        accuracy = 0.0
 
         velocityX = 0.0
         targetDirection = 0.0
@@ -85,20 +109,6 @@ final class BubbleGameController {
     func update(deltaTime: Float) {
         guard sessionState == .playing else { return }
 
-        // Countdown timer using wall-clock time (immune to update frequency)
-        if sessionStartDate == nil {
-            sessionStartDate = Date()
-        }
-        let elapsed = Int(Date().timeIntervalSince(sessionStartDate!))
-        let newRemaining = max(0, BubbleGameController.stageDuration - elapsed)
-        if newRemaining != remainingSeconds {
-            remainingSeconds = newRemaining
-        }
-        if remainingSeconds == 0 {
-            sessionState = .finished
-            return
-        }
-
         let targetVelocity = targetDirection * maxSpeed
 
         if targetDirection != 0 {
@@ -125,6 +135,9 @@ final class BubbleGameController {
         let xRange: ClosedRange<Float> = -0.35...0.35
         let yRange: ClosedRange<Float> = -0.25...0.25
         let minDistance: Float = 0.18
+        // Keep bubbles away from the pointer's initial position (x=0)
+        // to prevent instant pops at session start
+        let safeDistanceFromOrigin: Float = 0.12
 
         var positions: [SIMD3<Float>] = []
         var attempts = 0
@@ -136,10 +149,11 @@ final class BubbleGameController {
                 Float.random(in: yRange),
                 0.0
             )
-            let tooClose = positions.contains {
+            let tooCloseToOrigin = abs(candidate.x) < safeDistanceFromOrigin
+            let tooCloseToOther = positions.contains {
                 distance($0, candidate) < minDistance
             }
-            if !tooClose {
+            if !tooCloseToOrigin && !tooCloseToOther {
                 positions.append(candidate)
             }
         }
