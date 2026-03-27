@@ -8,6 +8,11 @@
 //  Neurospace-Team5
 //
 
+//
+//  ContentView.swift
+//  Neurospace-Team5
+//
+
 import SwiftUI
 
 struct ContentView: View {
@@ -15,11 +20,9 @@ struct ContentView: View {
 
     var body: some View {
         LobbyView()
-            .frame(minWidth: 420, minHeight: 560)
+            .frame(minWidth: 420, minHeight: 620)
     }
 }
-
-// MARK: - Lobby / Setup View
 
 struct LobbyView: View {
     @Environment(AppModel.self) private var appModel
@@ -65,6 +68,25 @@ struct LobbyView: View {
                     value: controller.activeArm.rawValue.capitalized,
                     valueColor: .purple
                 )
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Arm Debug")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+
+                Text("Left Tip: \(controller.leftTipText)")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+
+                Text("Right Tip: \(controller.rightTipText)")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+
+                Text("Motion Vector: \(controller.motionVectorText)")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
             }
 
             Divider()
@@ -164,8 +186,6 @@ struct LobbyView: View {
         }
     }
 }
-
-// MARK: - Status Row
 
 struct StatusRow: View {
     let icon: String

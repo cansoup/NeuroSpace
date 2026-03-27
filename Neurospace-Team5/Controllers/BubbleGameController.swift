@@ -10,6 +10,11 @@
 //  Neurospace-Team5
 //
 
+//
+//  BubbleGameController.swift
+//  Neurospace-Team5
+//
+
 import Foundation
 import Observation
 import simd
@@ -29,25 +34,23 @@ final class BubbleGameController {
     var bubbles: [Bubble] = []
     var score: Int = 0
 
-    // UI state
     var currentStage: Int = 1
     var targetBubbleColor: String = "Pink"
     var accuracy: Double = 0.0
     private var hitCount: Int = 0
     private var attemptCount: Int = 0
 
-    // Timer
     static let stageDuration: Int = 120
     var remainingSeconds: Int = stageDuration
     private var timerTask: Task<Void, Never>? = nil
 
-    // Movement
     private var targetDirection: SIMD3<Float> = .zero
-    private let maxSpeed: Float = 0.55
-    private let acceleration: Float = 3.0
-    private let deceleration: Float = 4.0
 
-    // Shared interaction box
+    // Tuned to feel less floaty
+    private let maxSpeed: Float = 0.48
+    private let acceleration: Float = 6.5
+    private let deceleration: Float = 8.0
+
     private let xLimit: ClosedRange<Float> = -0.38 ... 0.38
     private let yLimit: ClosedRange<Float> = -0.10 ... 0.24
     private let zLimit: ClosedRange<Float> = -0.22 ... 0.22
@@ -119,6 +122,10 @@ final class BubbleGameController {
         activeArm = arm
         targetDirection = .zero
         currentIntent = .idle
+
+        // stop previous active arm cleanly
+        leftArmState.velocity = .zero
+        rightArmState.velocity = .zero
     }
 
     func applyIntent(_ intent: BCIIntent) {
@@ -128,27 +135,21 @@ final class BubbleGameController {
         switch intent {
         case .moveLeft:
             targetDirection = [-1.0, 0.0, 0.0]
-
         case .moveRight:
             targetDirection = [1.0, 0.0, 0.0]
-
         case .moveUp:
             targetDirection = [0.0, 1.0, 0.0]
-
         case .moveDown:
             targetDirection = [0.0, -1.0, 0.0]
-
         case .moveForward:
             targetDirection = [0.0, 0.0, -1.0]
-
         case .moveBackward:
             targetDirection = [0.0, 0.0, 1.0]
-
         case .idle:
             targetDirection = .zero
-
         case .pop:
             currentArmState.isPopTriggered = true
+            attemptCount += 1
         }
     }
 
@@ -171,11 +172,17 @@ final class BubbleGameController {
     func update(deltaTime: Float) {
         guard sessionState == .playing || sessionState == .ready else { return }
 
-        let speedFactor: Float = simd_length(targetDirection) > 0 ? acceleration : deceleration
+        let moving = simd_length(targetDirection) > 0.0001
+        let speedFactor: Float = moving ? acceleration : deceleration
         let targetVelocity = targetDirection * maxSpeed
 
         currentArmState.velocity +=
             (targetVelocity - currentArmState.velocity) * min(speedFactor * deltaTime, 1.0)
+
+        // snap very small values to zero so stopping feels clean
+        if simd_length(currentArmState.velocity) < 0.001 {
+            currentArmState.velocity = .zero
+        }
 
         var newTip = currentArmState.tipPosition + currentArmState.velocity * deltaTime
 
@@ -190,10 +197,25 @@ final class BubbleGameController {
             updateSessionIfFinished()
         }
     }
+
+    var leftTipText: String {
+        formatted(leftArmState.tipPosition)
+    }
+
+    var rightTipText: String {
+        formatted(rightArmState.tipPosition)
+    }
+
+    var motionVectorText: String {
+        formatted(targetDirection)
+    }
+
+    private func formatted(_ v: SIMD3<Float>) -> String {
+        String(format: "(%.2f, %.2f, %.2f)", v.x, v.y, v.z)
+    }
+
     private var currentArmState: ArmState {
-        get {
-            activeArm == .left ? leftArmState : rightArmState
-        }
+        get { activeArm == .left ? leftArmState : rightArmState }
         set {
             if activeArm == .left {
                 leftArmState = newValue
@@ -239,7 +261,6 @@ final class BubbleGameController {
                 bubbles[i].isPopped = true
                 score += 100
                 hitCount += 1
-                attemptCount += 1
             }
         }
 
