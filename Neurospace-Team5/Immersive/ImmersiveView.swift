@@ -47,22 +47,18 @@ struct ImmersiveView: View {
             anchor.addChild(root)
             content.add(anchor)
 
-            // Control panel anchored to head — always top-right of user's view
+            // Control panel — fixed world position, top-right of bubble field
             if let panel = attachments.entity(for: "controlPanel") {
-                let panelAnchor = AnchorEntity(.head)
-                panel.position = SIMD3<Float>(0.35, 0.15, -0.8)
-                panelAnchor.addChild(panel)
-                content.add(panelAnchor)
+                panel.position = SIMD3<Float>(0.55, 1.85, -1.2)
+                content.add(panel)
             }
 
-            // Stop alert — centered in front of user
+            // Stop alert — fixed world position, centered in front of bubble field
             if let alert = attachments.entity(for: "stopAlert") {
-                let alertAnchor = AnchorEntity(.head)
                 alert.name = "StopAlert"
-                alert.position = SIMD3<Float>(0.0, 0.0, -0.8)
+                alert.position = SIMD3<Float>(0.0, 1.5, -1.0)
                 alert.isEnabled = false
-                alertAnchor.addChild(alert)
-                content.add(alertAnchor)
+                content.add(alert)
             }
 
         } update: { content, attachments in
