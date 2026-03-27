@@ -60,12 +60,7 @@ final class BubbleGameController {
             isPopTriggered: false
         )
 
-        bubbles = [
-            Bubble(position: [-0.25, 0.0, 0.0]),
-            Bubble(position: [ 0.25, 0.0, 0.0]),
-            Bubble(position: [-0.10, 0.0, 0.0]),
-            Bubble(position: [ 0.10, 0.0, 0.0])
-        ]
+        bubbles = Self.generateRandomBubbles(count: 4)
     }
 
     func setConnectionState(_ state: ConnectionState) {
@@ -124,6 +119,32 @@ final class BubbleGameController {
 
         autoPopIfTouching()
         updateSessionIfFinished()
+    }
+
+    private static func generateRandomBubbles(count: Int) -> [Bubble] {
+        let xRange: ClosedRange<Float> = -0.35...0.35
+        let yRange: ClosedRange<Float> = -0.25...0.25
+        let minDistance: Float = 0.18
+
+        var positions: [SIMD3<Float>] = []
+        var attempts = 0
+
+        while positions.count < count && attempts < 200 {
+            attempts += 1
+            let candidate = SIMD3<Float>(
+                Float.random(in: xRange),
+                Float.random(in: yRange),
+                0.0
+            )
+            let tooClose = positions.contains {
+                distance($0, candidate) < minDistance
+            }
+            if !tooClose {
+                positions.append(candidate)
+            }
+        }
+
+        return positions.map { Bubble(position: $0) }
     }
 
     private func autoPopIfTouching() {
