@@ -45,10 +45,12 @@ struct ImmersiveView: View {
             anchor.addChild(root)
             content.add(anchor)
 
-            // Attach control panel — top-right of the bubble field
+            // Control panel anchored to head — always top-right of user's view
             if let panel = attachments.entity(for: "controlPanel") {
-                panel.position = SIMD3<Float>(0.55, 0.45, -1.0)
-                content.add(panel)
+                let panelAnchor = AnchorEntity(.head)
+                panel.position = SIMD3<Float>(0.35, 0.15, -0.8)
+                panelAnchor.addChild(panel)
+                content.add(panelAnchor)
             }
 
         } update: { content, attachments in
