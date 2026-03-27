@@ -15,12 +15,16 @@ struct ImmersiveView: View {
     var body: some View {
         RealityView { content, attachments in
 
-            // Game objects — world-fixed, 1.2m in front at eye level (y=0 in visionOS)
-            let sceneAnchor = AnchorEntity(world: SIMD3<Float>(0, 0, -1.2))
-            sceneAnchor.name = "SceneAnchor"
+            // Head anchor — reliably places content in front of user
+            // in both simulator and device. World anchors require ARKit
+            // world tracking which is unavailable in the simulator.
+            let headAnchor = AnchorEntity(.head)
+            headAnchor.name = "HeadAnchor"
 
+            // Game objects: 1.2m in front, at eye level
             let root = Entity()
             root.name = "Root"
+            root.position = SIMD3<Float>(0, 0, -1.2)
 
             var armMaterial = PhysicallyBasedMaterial()
             armMaterial.baseColor = .init(tint: .white.withAlphaComponent(0.6))
@@ -47,23 +51,22 @@ struct ImmersiveView: View {
             for bubble in appModel.gameController.bubbles where !bubble.isPopped {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
-            sceneAnchor.addChild(root)
-            content.add(sceneAnchor)
+            headAnchor.addChild(root)
 
-            // Control panel — world-fixed, top-right of bubble field
+            // Control panel: top-right of bubble field
             if let panel = attachments.entity(for: "controlPanel") {
                 panel.name = "ControlPanel"
-                let panelAnchor = AnchorEntity(world: SIMD3<Float>(0.5, 0.2, -1.2))
-                panelAnchor.addChild(panel)
-                content.add(panelAnchor)
+                panel.position = SIMD3<Float>(0.45, 0.15, -1.2)
+                headAnchor.addChild(panel)
             }
 
+            content.add(headAnchor)
 
         } update: { content, _ in
 
             guard
-                let sceneAnchor = content.entities.first(where: { $0.name == "SceneAnchor" }),
-                let root = sceneAnchor.findEntity(named: "Root"),
+                let headAnchor = content.entities.first(where: { $0.name == "HeadAnchor" }),
+                let root = headAnchor.findEntity(named: "Root"),
                 let arm = root.findEntity(named: "Arm"),
                 let tip = root.findEntity(named: "PointerTip")
             else { return }
