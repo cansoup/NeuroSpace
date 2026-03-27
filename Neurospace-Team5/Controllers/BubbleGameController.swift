@@ -124,15 +124,11 @@ final class BubbleGameController {
 
     // MARK: - Stage progression
 
-    var canAdvanceStage: Bool {
-        guard currentStage < StageConfig.totalStages else { return false }
-        let c = stageConfig.unlockCriteria
-        return accuracy >= c.minimumAccuracy && hitCount >= c.requiredPops
-    }
+    var canAdvanceStage: Bool { currentStage < StageConfig.totalStages }
 
     var isOnFinalStage: Bool { currentStage >= StageConfig.totalStages }
 
-    /// Advances to the next stage. No-op if criteria not met or already at final stage.
+    /// Advances to the next stage. No-op if already at final stage.
     func advanceStage() {
         guard canAdvanceStage else { return }
         currentStage   += 1

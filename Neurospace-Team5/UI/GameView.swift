@@ -42,25 +42,26 @@ struct CongratsView: View {
 
             Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
                 Task { @MainActor in
-                    dismiss()
-                    let willAdvance = appModel.gameController.canAdvanceStage
-                    appModel.gameController.advanceStage()
+                    if appModel.gameController.canAdvanceStage {
+                        appModel.gameController.advanceStage()
 
-                    if willAdvance {
-                        // Continue in immersive space with the next stage
-                        if appModel.immersiveSpaceState != .open {
+                        if appModel.immersiveSpaceState == .open {
+                            // Immersive space is already running — start next stage in-place
+                            appModel.gameController.startSession()
+                            dismiss()
+                        } else {
+                            // Reopen immersive space for the next stage
                             appModel.immersiveSpaceState = .inTransition
                             if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                                 appModel.gameController.startSession()
                             } else {
                                 appModel.immersiveSpaceState = .closed
-                                openWindow(id: appModel.mainWindowID)
                             }
-                        } else {
-                            appModel.gameController.startSession()
+                            dismiss()
                         }
                     } else {
                         // Final stage cleared — return to lobby
+                        dismiss()
                         appModel.gameController.resetGame()
                         if appModel.immersiveSpaceState == .open {
                             appModel.immersiveSpaceState = .inTransition
