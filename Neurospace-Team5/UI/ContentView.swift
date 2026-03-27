@@ -3,16 +3,19 @@
 //  Neurospace-Team5
 //
 
+//
+//  ContentView.swift
+//  Neurospace-Team5
+//
+
 import SwiftUI
 
 struct ContentView: View {
     @Environment(AppModel.self) private var appModel
 
-    private var controller: BubbleGameController { appModel.gameController }
-
     var body: some View {
         LobbyView()
-            .frame(minWidth: 520, minHeight: 380)
+            .frame(minWidth: 420, minHeight: 560)
     }
 }
 
@@ -27,8 +30,6 @@ struct LobbyView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-
-            // Header
             VStack(alignment: .leading, spacing: 6) {
                 Text("Neurospace")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
@@ -39,7 +40,6 @@ struct LobbyView: View {
 
             Divider()
 
-            // Status
             VStack(alignment: .leading, spacing: 10) {
                 StatusRow(
                     icon: "antenna.radiowaves.left.and.right",
@@ -59,11 +59,16 @@ struct LobbyView: View {
                     value: controller.currentIntent.rawValue,
                     valueColor: .secondary
                 )
+                StatusRow(
+                    icon: "hand.raised",
+                    label: "Active Arm",
+                    value: controller.activeArm.rawValue.capitalized,
+                    valueColor: .purple
+                )
             }
 
             Divider()
 
-            // Debug controls
             VStack(alignment: .leading, spacing: 12) {
                 Text("Debug Controls")
                     .font(.system(size: 13, weight: .semibold))
@@ -71,32 +76,67 @@ struct LobbyView: View {
                     .tracking(0.5)
 
                 HStack(spacing: 8) {
+                    Button("Left Arm") {
+                        controller.setActiveArm(.left)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(controller.activeArm == .left ? .purple : .gray)
+
+                    Button("Right Arm") {
+                        controller.setActiveArm(.right)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(controller.activeArm == .right ? .purple : .gray)
+                }
+
+                HStack(spacing: 8) {
                     Button("← Left") { controller.applyIntent(.moveLeft) }
                         .buttonStyle(.bordered)
+
                     Button("Right →") { controller.applyIntent(.moveRight) }
                         .buttonStyle(.bordered)
+
+                    Button("↑ Up") { controller.applyIntent(.moveUp) }
+                        .buttonStyle(.bordered)
+
+                    Button("↓ Down") { controller.applyIntent(.moveDown) }
+                        .buttonStyle(.bordered)
+                }
+
+                HStack(spacing: 8) {
+                    Button("Forward") { controller.applyIntent(.moveForward) }
+                        .buttonStyle(.bordered)
+
+                    Button("Backward") { controller.applyIntent(.moveBackward) }
+                        .buttonStyle(.bordered)
+
                     Button("Idle") { controller.applyIntent(.idle) }
                         .buttonStyle(.bordered)
                 }
 
-                Button("Reset Game") { controller.resetGame() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red.opacity(0.8))
+                Button("Reset Game") {
+                    controller.resetGame()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red.opacity(0.8))
             }
 
             Divider()
 
-            // Start game
             Button {
                 Task { @MainActor in
                     controller.startSession()
+
                     if appModel.immersiveSpaceState == .closed {
                         appModel.immersiveSpaceState = .inTransition
+
                         switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                         case .opened:
                             dismissWindow(id: appModel.mainWindowID)
+
                         case .userCancelled, .error:
                             fallthrough
+
                         @unknown default:
                             appModel.immersiveSpaceState = .closed
                         }
@@ -138,10 +178,13 @@ struct StatusRow: View {
             Image(systemName: icon)
                 .frame(width: 20)
                 .foregroundStyle(.secondary)
+
             Text(label)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
+
             Spacer()
+
             Text(value)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(valueColor)
