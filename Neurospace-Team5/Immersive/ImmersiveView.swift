@@ -15,15 +15,12 @@ struct ImmersiveView: View {
     var body: some View {
         RealityView { content, attachments in
 
-            // Single camera anchor — ensures content appears in front of user
-            // in both simulator and device regardless of world origin
-            let sceneAnchor = AnchorEntity(.camera)
+            // Game objects — world-fixed, 1.2m in front at eye level (y=0 in visionOS)
+            let sceneAnchor = AnchorEntity(world: SIMD3<Float>(0, 0, -1.2))
             sceneAnchor.name = "SceneAnchor"
 
-            // --- Game objects (1.2m in front of camera) ---
             let root = Entity()
             root.name = "Root"
-            root.position = SIMD3<Float>(0, 0, -1.2)
 
             var armMaterial = PhysicallyBasedMaterial()
             armMaterial.baseColor = .init(tint: .white.withAlphaComponent(0.6))
@@ -47,28 +44,29 @@ struct ImmersiveView: View {
 
             root.addChild(arm)
             root.addChild(tip)
-
             for bubble in appModel.gameController.bubbles where !bubble.isPopped {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
             sceneAnchor.addChild(root)
+            content.add(sceneAnchor)
 
-            // --- Control panel (top-right) ---
+            // Control panel — world-fixed, top-right of bubble field
             if let panel = attachments.entity(for: "controlPanel") {
                 panel.name = "ControlPanel"
-                panel.position = SIMD3<Float>(0.45, 0.15, -1.2)
-                sceneAnchor.addChild(panel)
+                let panelAnchor = AnchorEntity(world: SIMD3<Float>(0.5, 0.2, -1.2))
+                panelAnchor.addChild(panel)
+                content.add(panelAnchor)
             }
 
-            // --- Stop alert (center, hidden by default) ---
+            // Stop alert — world-fixed, centered, hidden by default
             if let alert = attachments.entity(for: "stopAlert") {
                 alert.name = "StopAlert"
-                alert.position = SIMD3<Float>(0, 0, -1.0)
                 alert.isEnabled = false
-                sceneAnchor.addChild(alert)
+                let alertAnchor = AnchorEntity(world: SIMD3<Float>(0, 0, -1.0))
+                alertAnchor.name = "StopAlertAnchor"
+                alertAnchor.addChild(alert)
+                content.add(alertAnchor)
             }
-
-            content.add(sceneAnchor)
 
         } update: { content, _ in
 
@@ -86,8 +84,9 @@ struct ImmersiveView: View {
             tip.position = controller.armState.pointerPosition
             syncBubbles(in: root, with: controller.bubbles)
 
-            // Toggle stop alert visibility
-            if let alert = sceneAnchor.findEntity(named: "StopAlert") {
+            // Toggle stop alert
+            if let alertAnchor = content.entities.first(where: { $0.name == "StopAlertAnchor" }),
+               let alert = alertAnchor.findEntity(named: "StopAlert") {
                 alert.isEnabled = appModel.showStopAlert
             }
 
