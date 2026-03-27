@@ -24,6 +24,12 @@ struct Neurospace_Team5App: App {
         }
         .defaultSize(width: 400, height: 300)
 
+        WindowGroup(id: appModel.missionFailedWindowID) {
+            MissionFailedView()
+                .environment(appModel)
+        }
+        .defaultSize(width: 400, height: 320)
+
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()
                 .environment(appModel)

@@ -114,9 +114,12 @@ struct ImmersiveView: View {
                 }
         )
         .onChange(of: appModel.gameController.sessionState) { _, newState in
-            guard newState == .finished,
-                  appModel.gameController.bubbles.allSatisfy(\.isPopped) else { return }
-            openWindow(id: appModel.congratsWindowID)
+            guard newState == .finished else { return }
+            if appModel.gameController.bubbles.allSatisfy(\.isPopped) {
+                openWindow(id: appModel.congratsWindowID)
+            } else {
+                openWindow(id: appModel.missionFailedWindowID)
+            }
         }
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
@@ -207,12 +210,18 @@ struct ImmersiveView: View {
     }
 
     private func syncBubbles(in root: Entity, with bubbles: [Bubble]) {
-        for bubble in bubbles {
-            let name = "Bubble_\(bubble.id.uuidString)"
+        // Remove entities that no longer exist in the current bubbles array (e.g. after reset)
+        let validNames = Set(bubbles.filter { !$0.isPopped }.map { "Bubble_\($0.id.uuidString)" })
+        for child in root.children where child.name.hasPrefix("Bubble_") {
+            if !validNames.contains(child.name) {
+                child.removeFromParent()
+            }
+        }
 
-            if bubble.isPopped {
-                root.findEntity(named: name)?.removeFromParent()
-            } else if root.findEntity(named: name) == nil {
+        // Add entities for new bubbles
+        for bubble in bubbles where !bubble.isPopped {
+            let name = "Bubble_\(bubble.id.uuidString)"
+            if root.findEntity(named: name) == nil {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
         }

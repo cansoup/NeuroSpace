@@ -50,6 +50,73 @@ struct CongratsView: View {
     }
 }
 
+// MARK: - Mission Failed Window
+
+struct MissionFailedView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.red)
+
+            VStack(spacing: 8) {
+                Text("Mission Failed")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Time's up! Better luck next time.")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Score: \(appModel.gameController.score)")
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(.red)
+
+            HStack(spacing: 16) {
+                Button("Go to Main") {
+                    Task { @MainActor in
+                        dismiss()
+                        appModel.gameController.resetGame()
+                        if appModel.immersiveSpaceState == .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            await dismissImmersiveSpace()
+                        }
+                        openWindow(id: appModel.mainWindowID)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                Button("Try Again") {
+                    Task { @MainActor in
+                        dismiss()
+                        appModel.gameController.resetGame()
+                        if appModel.immersiveSpaceState != .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+                                appModel.gameController.startSession()
+                            } else {
+                                appModel.immersiveSpaceState = .closed
+                            }
+                        } else {
+                            appModel.gameController.startSession()
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
+                .controlSize(.large)
+            }
+        }
+        .padding(40)
+    }
+}
+
 // MARK: - Compact Control Panel (RealityKit attachment)
 
 struct GameControlPanel: View {
