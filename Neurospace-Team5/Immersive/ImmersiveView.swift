@@ -53,7 +53,23 @@ struct ImmersiveView: View {
                 content.add(panelAnchor)
             }
 
+            // Stop alert — centered in front of user
+            if let alert = attachments.entity(for: "stopAlert") {
+                let alertAnchor = AnchorEntity(.head)
+                alert.name = "StopAlert"
+                alert.position = SIMD3<Float>(0.0, 0.0, -0.8)
+                alert.isEnabled = false
+                alertAnchor.addChild(alert)
+                content.add(alertAnchor)
+            }
+
         } update: { content, attachments in
+
+            // Show/hide stop alert
+            if let alertAnchor = content.entities.first(where: { $0.findEntity(named: "StopAlert") != nil }),
+               let alert = alertAnchor.findEntity(named: "StopAlert") {
+                alert.isEnabled = appModel.showStopAlert
+            }
 
             let deltaTime: Float = 1.0 / 60.0
             appModel.gameController.update(deltaTime: deltaTime)
@@ -77,6 +93,10 @@ struct ImmersiveView: View {
         } attachments: {
             Attachment(id: "controlPanel") {
                 GameControlPanel()
+                    .environment(appModel)
+            }
+            Attachment(id: "stopAlert") {
+                StopAlertPanel()
                     .environment(appModel)
             }
         }

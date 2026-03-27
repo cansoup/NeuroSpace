@@ -9,9 +9,6 @@ import SwiftUI
 
 struct GameControlPanel: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-    @Environment(\.openWindow) private var openWindow
-    @State private var showStopConfirm = false
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -45,7 +42,7 @@ struct GameControlPanel: View {
                 Spacer()
 
                 Button {
-                    showStopConfirm = true
+                    appModel.showStopAlert = true
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
@@ -58,39 +55,6 @@ struct GameControlPanel: View {
             .padding(.horizontal, 14)
             .padding(.top, 12)
             .padding(.bottom, 8)
-
-            // Inline stop confirmation
-            if showStopConfirm {
-                Divider().opacity(0.3)
-                VStack(spacing: 8) {
-                    Text("Stop session?")
-                        .font(.system(size: 12, weight: .semibold))
-                    HStack(spacing: 8) {
-                        Button("Cancel") {
-                            showStopConfirm = false
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-
-                        Button("Stop") {
-                            showStopConfirm = false
-                            Task { @MainActor in
-                                controller.resetGame()
-                                if appModel.immersiveSpaceState == .open {
-                                    appModel.immersiveSpaceState = .inTransition
-                                    await dismissImmersiveSpace()
-                                }
-                                openWindow(id: appModel.mainWindowID)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .controlSize(.small)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-            }
 
             Divider().opacity(0.3)
 
@@ -127,5 +91,57 @@ struct GameControlPanel: View {
         }
         .frame(width: 200)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+// MARK: - Stop Alert Panel (centered RealityKit attachment)
+
+struct StopAlertPanel: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
+
+    private var controller: BubbleGameController { appModel.gameController }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 8) {
+                Image(systemName: "stop.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.red)
+                Text("End Session?")
+                    .font(.system(size: 20, weight: .bold))
+                Text("Your current progress will be lost.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            HStack(spacing: 12) {
+                Button("Cancel") {
+                    appModel.showStopAlert = false
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                Button("End Session") {
+                    appModel.showStopAlert = false
+                    Task { @MainActor in
+                        controller.resetGame()
+                        if appModel.immersiveSpaceState == .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            await dismissImmersiveSpace()
+                        }
+                        openWindow(id: appModel.mainWindowID)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.large)
+            }
+        }
+        .padding(32)
+        .frame(width: 320)
+        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
