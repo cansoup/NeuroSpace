@@ -20,7 +20,7 @@
         </dict>
     </dict>
 
-    <!-- Allows use of local network to receive from the Python code -->
+    <!-- Allows use of local network to receive commands from the Python app -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
