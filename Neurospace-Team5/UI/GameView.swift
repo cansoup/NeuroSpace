@@ -5,6 +5,146 @@
 
 import SwiftUI
 
+// MARK: - Congratulations Window
+
+struct CongratsView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.yellow)
+
+            VStack(spacing: 8) {
+                Text("Congratulations!")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                let controller = appModel.gameController
+                if controller.isOnFinalStage {
+                    Text("You completed all stages!")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Stage \(controller.currentStage) cleared! Ready for Stage \(controller.currentStage + 1)?")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+
+            Text("Score: \(appModel.gameController.score)")
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(.purple)
+
+            Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
+                Task { @MainActor in
+                    dismiss()
+                    let willAdvance = appModel.gameController.canAdvanceStage
+                    appModel.gameController.advanceStage()
+
+                    if willAdvance {
+                        // Continue in immersive space with the next stage
+                        if appModel.immersiveSpaceState != .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+                                appModel.gameController.startSession()
+                            } else {
+                                appModel.immersiveSpaceState = .closed
+                                openWindow(id: appModel.mainWindowID)
+                            }
+                        } else {
+                            appModel.gameController.startSession()
+                        }
+                    } else {
+                        // Final stage cleared — return to lobby
+                        appModel.gameController.resetGame()
+                        if appModel.immersiveSpaceState == .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            await dismissImmersiveSpace()
+                        }
+                        openWindow(id: appModel.mainWindowID)
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.purple)
+            .controlSize(.large)
+        }
+        .padding(40)
+    }
+}
+
+// MARK: - Mission Failed Window
+
+struct MissionFailedView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.red)
+
+            VStack(spacing: 8) {
+                Text("Mission Failed")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Time's up! Better luck next time.")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Score: \(appModel.gameController.score)")
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(.red)
+
+            HStack(spacing: 16) {
+                Button("Go to Main") {
+                    Task { @MainActor in
+                        dismiss()
+                        appModel.gameController.resetGame()
+                        if appModel.immersiveSpaceState == .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            await dismissImmersiveSpace()
+                        }
+                        openWindow(id: appModel.mainWindowID)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                Button("Try Again") {
+                    Task { @MainActor in
+                        dismiss()
+                        appModel.gameController.resetGame(keepStage: true)
+                        if appModel.immersiveSpaceState != .open {
+                            appModel.immersiveSpaceState = .inTransition
+                            if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+                                appModel.gameController.startSession()
+                            } else {
+                                appModel.immersiveSpaceState = .closed
+                            }
+                        } else {
+                            appModel.gameController.startSession()
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
+                .controlSize(.large)
+            }
+        }
+        .padding(40)
+    }
+}
+
 // MARK: - Compact Control Panel (RealityKit attachment)
 
 struct GameControlPanel: View {
@@ -31,6 +171,7 @@ struct GameControlPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // width is fixed here so the Spacer in the top HStack doesn't expand indefinitely
             if confirmingStop {
                 // Stop confirmation
                 VStack(spacing: 16) {
@@ -59,8 +200,7 @@ struct GameControlPanel: View {
                         .controlSize(.large)
                     }
                 }
-                .padding(28)
-                .frame(width: 300)
+                .padding(16)
 
             } else {
                 // Normal panel
@@ -69,14 +209,14 @@ struct GameControlPanel: View {
                         .fill(eegColor)
                         .frame(width: 8, height: 8)
                     Text(controller.connectionState.displayText)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button {
                         confirmingStop = true
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(width: 26, height: 26)
                             .background(.red, in: RoundedRectangle(cornerRadius: 7))
@@ -92,11 +232,11 @@ struct GameControlPanel: View {
                 HStack(spacing: 20) {
                     VStack(spacing: 2) {
                         Text(timeString)
-                            .font(.system(size: 20, weight: .bold, design: .monospaced))
+                            .font(.system(size: 28, weight: .bold, design: .monospaced))
                             .foregroundStyle(isLowTime ? .red : .primary)
                             .animation(.easeInOut(duration: 0.3), value: isLowTime)
                         Text("TIME")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .tracking(1)
                     }
@@ -105,20 +245,20 @@ struct GameControlPanel: View {
 
                     VStack(spacing: 2) {
                         Text("\(controller.score)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                             .contentTransition(.numericText())
                             .animation(.spring(duration: 0.3), value: controller.score)
                         Text("SCORE")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .tracking(1)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .frame(width: 200)
             }
         }
+        .frame(width: 220)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
