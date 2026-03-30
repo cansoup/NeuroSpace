@@ -1,0 +1,184 @@
+# BCI ML Pipeline Configuration
+# BCI Competition IIIa - 4-class Motor Imagery Classification
+
+# ===== PATHS =====
+paths:
+  # Data directories (relative to project root)
+  raw_data: "data/raw"
+  interim_data: "data/interim"
+  processed_data: "data/processed"
+
+  # Model directories
+  model_checkpoints: "models/saved_models"
+  tensorboard_logs: "runs"
+
+  # Subject files (filenames only, placed in raw_data/)
+  subjects:
+    - "k3b.gdf"  # Subject 1
+    - "k6b.gdf"  # Subject 2
+    - "l1b.gdf"  # Subject 3
+
+# ===== DATA PREPROCESSING =====
+preprocessing:
+  # Sampling rate (BCI IIIa dataset)
+  sfreq: 250  # Hz
+
+  # Number of channels
+  n_channels: 60  # EEG channels (excluding EOG)
+
+  # Frequency filtering
+  bandpass:
+    low: 8.0   # Hz - lower bound (mu rhythm starts ~8 Hz)
+    high: 30.0  # Hz - upper bound (beta rhythm ends ~30 Hz)
+
+  notch:
+    freq: 50.0  # Hz - powerline noise (50 Hz for Europe, use 60 for US)
+
+  # Epoching parameters
+  epoch:
+    tmin: -0.5  # seconds before event (baseline period)
+    tmax: 3.5   # seconds after event (motor imagery period)
+    baseline: [-0.5, 0.0]  # baseline correction window
+
+  # Event codes (BCI Competition IIIa)
+  # GDF standard event codes for motor imagery BCI experiments
+  event_codes:
+    left_hand: 769   # Maps to "left" (0x0301: left hand motor imagery)
+    right_hand: 770  # Maps to "right" (0x0302: right hand motor imagery)
+    foot: 771        # Maps to "down" (0x0303: foot motor imagery)
+    tongue: 772      # Maps to "up" (0x0304: tongue motor imagery)
+
+  # Class mapping for model output
+  # Directional naming for intuitive UI control in visionOS application
+  class_mapping:
+    0: "left"    # Left hand motor imagery → UI left action
+    1: "right"   # Right hand motor imagery → UI right action
+    2: "down"    # Foot motor imagery → UI down action
+    3: "up"      # Tongue motor imagery → UI up action
+
+  # Train/validation split
+  validation_split: 0.2  # 20% for validation
+  random_seed: 42
+
+# ===== MODEL ARCHITECTURE =====
+model:
+  name: "EEGNet"
+
+  # EEGNet hyperparameters
+  eegnet:
+    # Input shape: (batch, 1, channels, timepoints)
+    n_classes: 4
+    n_channels: 60
+    n_timepoints: 1001  # 4 seconds × 250 Hz + 1 (MNE includes both endpoints: -0.5s to 3.5s)
+
+    # Architecture parameters
+    F1: 8           # Number of temporal filters
+    D: 2            # Depth multiplier (spatial filters per temporal filter)
+    F2: 16          # Number of pointwise filters (F1 * D)
+    kernel_length: 64  # Length of temporal convolution (in samples)
+    dropout: 0.5    # Dropout rate
+
+    # Pooling
+    pool_size: 8    # Average pooling size
+
+# ===== TRAINING =====
+training:
+  # Optimization
+  optimizer: "Adam"
+  learning_rate: 0.001
+  weight_decay: 0.0001  # L2 regularization
+
+  # Training schedule
+  batch_size: 32
+  epochs: 200
+  early_stopping:
+    patience: 20  # Stop if no improvement for 20 epochs
+    min_delta: 0.001  # Minimum change to qualify as improvement
+
+  # Loss function
+  loss: "CrossEntropyLoss"
+
+  # Learning rate scheduler
+  lr_scheduler:
+    enabled: true
+    type: "ReduceLROnPlateau"
+    factor: 0.5      # Reduce LR by half
+    patience: 10     # After 10 epochs without improvement
+    min_lr: 0.00001
+
+  # Data augmentation (optional)
+  augmentation:
+    enabled: true
+    time_jitter: 0.1     # ±10% time shift
+    amplitude_scale: 0.1 # ±10% amplitude scaling
+
+  # GPU / Hardware acceleration
+  gpu:
+    # Device selection: "auto", "cuda", "cpu", "cuda:0", "cuda:1", etc.
+    device: "auto"  # Auto-detect CUDA if available
+
+    # Mixed Precision Training (FP16)
+    # Provides approximately 2x speedup with minimal accuracy impact
+    # Requires: Compute Capability >= 7.0 (Tensor Core support)
+    # Supported on: Turing, Ampere, and newer architectures
+    mixed_precision:
+      enabled: true  # Set to false if compatibility issues occur
+      opt_level: "O1"  # O1 (recommended), O2 (aggressive), O3 (full FP16)
+
+    # Memory management
+    allow_tf32: true  # TensorFloat-32 on Ampere architecture GPUs (Compute Capability >= 8.0)
+    cudnn_benchmark: true  # Auto-tune convolution algorithms for optimal performance
+    empty_cache_every_n_epochs: 10  # Periodic GPU cache clearing
+
+  # Cross-validation
+  cross_validation:
+    enabled: true
+    type: "leave_one_subject_out"  # LOSO for generalization
+    n_folds: 3  # 3 subjects
+
+# ===== EVALUATION =====
+evaluation:
+  # Metrics to compute
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1_score"
+    - "confusion_matrix"
+    - "roc_auc"  # One-vs-rest
+
+  # Confidence threshold for predictions
+  confidence_threshold: 0.75  # Match Swift client minimum
+
+  # Visualization
+  plot:
+    confusion_matrix: true
+    roc_curves: true
+    training_curves: true
+
+# ===== INFERENCE (Future: Real-time integration) =====
+inference:
+  # Model checkpoint to load
+  checkpoint: "best_model.pth"
+
+  # Real-time parameters
+  window_length: 4.0  # seconds (match training epoch length)
+  overlap: 0.5        # 50% overlap for sliding window
+
+  # WebSocket bridge integration
+  websocket:
+    host: "0.0.0.0"
+    port: 8765
+    confidence_min: 0.75  # Only send intents above this threshold
+
+# ===== LOGGING =====
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  tensorboard: true
+  save_checkpoints: true
+  checkpoint_frequency: 10  # Save every 10 epochs
+
+# ===== REPRODUCIBILITY =====
+reproducibility:
+  seed: 42
+  deterministic: true  # Use deterministic algorithms (slower but reproducible)
