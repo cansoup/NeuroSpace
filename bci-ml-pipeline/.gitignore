@@ -1,0 +1,45 @@
+# BCI ML Pipeline - Git Ignore File
+
+# Large data files (too big for Git)
+data/raw/*.gdf
+data/raw/*.mat
+data/interim/*
+data/processed/*.npz
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+logs/
+runs/  # TensorBoard logs can be large
+
+# Keep directory structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/interim/.gitkeep
