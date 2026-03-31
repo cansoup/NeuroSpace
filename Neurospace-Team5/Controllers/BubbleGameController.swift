@@ -252,6 +252,23 @@ final class BubbleGameController {
 
         checkSessionFinished()
     }
+    // MARK: - Debug Helpers
+
+    var leftTipText: String {
+        format(leftArmState.tipPosition)
+    }
+
+    var rightTipText: String {
+        format(rightArmState.tipPosition)
+    }
+
+    var motionVectorText: String {
+        format(targetDirection)
+    }
+
+    private func format(_ v: SIMD3<Float>) -> String {
+        String(format: "(%.2f, %.2f, %.2f)", v.x, v.y, v.z)
+    }
 
     // MARK: - Private helpers
 
