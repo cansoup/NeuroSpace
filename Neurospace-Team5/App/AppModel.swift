@@ -4,7 +4,6 @@
 //
 //  Created by Shaiyan Haseen Khan on 16/3/2026.
 //
-
 import SwiftUI
 import Observation
 
@@ -23,6 +22,16 @@ final class AppModel {
     }
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
-    var gameController = BubbleGameController()
+    var gameController: BubbleGameController
     var shouldEndSession: Bool = false
+
+    let armMapper: BCIArmMapper
+    let fakeBCIInput: FakeBCIInputService
+
+    init() {
+        let controller = BubbleGameController()
+        self.gameController = controller
+        self.armMapper = BCIArmMapper(controller: controller)
+        self.fakeBCIInput = FakeBCIInputService(mapper: self.armMapper)
+    }
 }

@@ -1,12 +1,4 @@
-//
-//  BubbleGameController.swift
-//  Neurospace-Team5
-//
 
-//
-//  BubbleGameController.swift
-//  Neurospace-Team5
-//
 
 import Foundation
 import Observation
