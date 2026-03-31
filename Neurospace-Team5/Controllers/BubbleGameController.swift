@@ -1,7 +1,4 @@
-//
-//  BubbleGameController.swift
-//  Neurospace-Team5
-//
+
 
 import Foundation
 import Observation
@@ -206,6 +203,11 @@ final class BubbleGameController {
         currentArmState.velocity +=
             (targetVelocity - currentArmState.velocity) * min(speedFactor * deltaTime, 1.0)
 
+        // snap very small values to zero so stopping feels clean
+        if simd_length(currentArmState.velocity) < 0.001 {
+            currentArmState.velocity = .zero
+        }
+
         var newTip = currentArmState.tipPosition + currentArmState.velocity * deltaTime
         newTip.x = min(max(newTip.x, xLimit.lowerBound), xLimit.upperBound)
         newTip.y = min(max(newTip.y, yLimit.lowerBound), yLimit.upperBound)
@@ -237,6 +239,23 @@ final class BubbleGameController {
         accuracy = Double(hitCount) / Double(attemptCount)
 
         checkSessionFinished()
+    }
+    // MARK: - Debug Helpers
+
+    var leftTipText: String {
+        format(leftArmState.tipPosition)
+    }
+
+    var rightTipText: String {
+        format(rightArmState.tipPosition)
+    }
+
+    var motionVectorText: String {
+        format(targetDirection)
+    }
+
+    private func format(_ v: SIMD3<Float>) -> String {
+        String(format: "(%.2f, %.2f, %.2f)", v.x, v.y, v.z)
     }
 
     // MARK: - Private helpers

@@ -9,6 +9,11 @@
 //  Neurospace-Team5
 //
 
+//
+//  ImmersiveView.swift
+//  Neurospace-Team5
+//
+
 import SwiftUI
 import RealityKit
 import simd
@@ -28,30 +33,35 @@ struct ImmersiveView: View {
             root.name = "Root"
             root.position = .zero
 
-            // Left arm
             let leftArm = makeArmBodyEntity(
                 name: "LeftArmBody",
                 color: appModel.gameController.activeArm == .left ? .cyan : .gray
             )
             let leftTip = makeTipEntity(
                 name: "LeftArmTip",
-                color: appModel.gameController.activeArm == .left ? .red : .gray
+                color: appModel.gameController.activeArm == .left ? .systemPink : .gray,
+                radius: appModel.gameController.activeArm == .left ? 0.032 : 0.026
             )
 
-            // Right arm
             let rightArm = makeArmBodyEntity(
                 name: "RightArmBody",
                 color: appModel.gameController.activeArm == .right ? .cyan : .gray
             )
             let rightTip = makeTipEntity(
                 name: "RightArmTip",
-                color: appModel.gameController.activeArm == .right ? .red : .gray
+                color: appModel.gameController.activeArm == .right ? .systemPink : .gray,
+                radius: appModel.gameController.activeArm == .right ? 0.032 : 0.026
             )
+
+            let leftGlow = makeHighlightRing(name: "LeftArmGlow")
+            let rightGlow = makeHighlightRing(name: "RightArmGlow")
 
             root.addChild(leftArm)
             root.addChild(leftTip)
             root.addChild(rightArm)
             root.addChild(rightTip)
+            root.addChild(leftGlow)
+            root.addChild(rightGlow)
 
             for bubble in appModel.gameController.bubbles where !bubble.isGone {
                 root.addChild(makeBubbleEntity(for: bubble))
@@ -74,7 +84,9 @@ struct ImmersiveView: View {
                 let leftArmBody = root.findEntity(named: "LeftArmBody") as? ModelEntity,
                 let leftTip = root.findEntity(named: "LeftArmTip") as? ModelEntity,
                 let rightArmBody = root.findEntity(named: "RightArmBody") as? ModelEntity,
-                let rightTip = root.findEntity(named: "RightArmTip") as? ModelEntity
+                let rightTip = root.findEntity(named: "RightArmTip") as? ModelEntity,
+                let leftGlow = root.findEntity(named: "LeftArmGlow") as? ModelEntity,
+                let rightGlow = root.findEntity(named: "RightArmGlow") as? ModelEntity
             else { return }
 
             let controller = appModel.gameController
@@ -83,6 +95,7 @@ struct ImmersiveView: View {
             updateArm(
                 body: leftArmBody,
                 tip: leftTip,
+                glow: leftGlow,
                 state: controller.leftArmState,
                 isActive: controller.activeArm == .left
             )
@@ -90,6 +103,7 @@ struct ImmersiveView: View {
             updateArm(
                 body: rightArmBody,
                 tip: rightTip,
+                glow: rightGlow,
                 state: controller.rightArmState,
                 isActive: controller.activeArm == .right
             )
@@ -140,8 +154,8 @@ struct ImmersiveView: View {
 
     private func makeArmBodyEntity(name: String, color: UIColor) -> ModelEntity {
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: color.withAlphaComponent(0.8))
-        material.roughness = .init(floatLiteral: 0.35)
+        material.baseColor = .init(tint: color.withAlphaComponent(0.85))
+        material.roughness = .init(floatLiteral: 0.28)
 
         let entity = ModelEntity(
             mesh: .generateCylinder(height: 1.0, radius: 0.018),
@@ -151,20 +165,37 @@ struct ImmersiveView: View {
         return entity
     }
 
-    private func makeTipEntity(name: String, color: UIColor) -> ModelEntity {
+    private func makeTipEntity(name: String, color: UIColor, radius: Float) -> ModelEntity {
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: color.withAlphaComponent(0.95))
-        material.roughness = .init(floatLiteral: 0.15)
+        material.baseColor = .init(tint: color.withAlphaComponent(0.98))
+        material.roughness = .init(floatLiteral: 0.12)
 
         let entity = ModelEntity(
-            mesh: .generateSphere(radius: 0.028),
+            mesh: .generateSphere(radius: radius),
             materials: [material]
         )
         entity.name = name
         return entity
     }
 
-    private func updateArm(body: ModelEntity, tip: ModelEntity, state: ArmState, isActive: Bool) {
+    private func makeHighlightRing(name: String) -> ModelEntity {
+        let material = UnlitMaterial(color: .systemPink.withAlphaComponent(0.55))
+        let entity = ModelEntity(
+            mesh: .generateSphere(radius: 0.040),
+            materials: [material]
+        )
+        entity.name = name
+        entity.isEnabled = false
+        return entity
+    }
+
+    private func updateArm(
+        body: ModelEntity,
+        tip: ModelEntity,
+        glow: ModelEntity,
+        state: ArmState,
+        isActive: Bool
+    ) {
         tip.position = state.tipPosition
 
         let direction = state.tipPosition - state.basePosition
@@ -181,13 +212,17 @@ struct ImmersiveView: View {
             translation: midpoint
         )
 
+        glow.position = state.tipPosition
+        glow.isEnabled = isActive
+        glow.scale = isActive ? [1.0, 1.0, 1.0] : [0.001, 0.001, 0.001]
+
         if var bodyMaterial = body.model?.materials.first as? PhysicallyBasedMaterial {
-            bodyMaterial.baseColor = .init(tint: (isActive ? UIColor.cyan : UIColor.gray).withAlphaComponent(0.8))
+            bodyMaterial.baseColor = .init(tint: (isActive ? UIColor.cyan : UIColor.gray).withAlphaComponent(0.85))
             body.model?.materials = [bodyMaterial]
         }
 
         if var tipMaterial = tip.model?.materials.first as? PhysicallyBasedMaterial {
-            tipMaterial.baseColor = .init(tint: (isActive ? UIColor.red : UIColor.gray).withAlphaComponent(0.95))
+            tipMaterial.baseColor = .init(tint: (isActive ? UIColor.systemPink : UIColor.gray).withAlphaComponent(0.98))
             tip.model?.materials = [tipMaterial]
         }
     }
