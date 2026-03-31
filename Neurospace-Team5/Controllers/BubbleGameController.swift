@@ -291,16 +291,20 @@ final class BubbleGameController {
     }
 
     private func updateBubbleLifecycle(deltaTime: Float) {
-        // Move dynamic bubbles (stage 5)
-        for i in bubbles.indices where !bubbles[i].isPopped {
-            if simd_length(bubbles[i].velocity) > 0.001 {
-                bubbles[i].position += bubbles[i].velocity * deltaTime
+        if stageConfig.respawnsEnabled {
+            // Batch all position mutations into a local copy, then assign once
+            // to avoid triggering N @Observable notifications (one per bubble per frame)
+            var updated = bubbles
+            for i in updated.indices where !updated[i].isPopped {
+                if simd_length(updated[i].velocity) > 0.001 {
+                    updated[i].position += updated[i].velocity * deltaTime
+                }
             }
-        }
-
-        // Respawn batch when all are gone (stage 5 — session ends only by timer)
-        if stageConfig.respawnsEnabled && bubbles.allSatisfy(\.isGone) {
-            bubbles = Self.generateBubbles(for: stageConfig)
+            if updated.allSatisfy(\.isGone) {
+                bubbles = Self.generateBubbles(for: stageConfig)
+            } else {
+                bubbles = updated
+            }
             return
         }
 

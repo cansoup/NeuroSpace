@@ -230,7 +230,18 @@ struct GameControlPanel: View {
 
                 Divider().opacity(0.3)
 
-                HStack(spacing: 20) {
+                HStack(spacing: 14) {
+                    VStack(spacing: 2) {
+                        Text("\(controller.currentStage)/\(StageConfig.totalStages)")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("STAGE")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1)
+                    }
+
+                    Divider().frame(height: 30).opacity(0.3)
+
                     VStack(spacing: 2) {
                         Text(timeString)
                             .font(.system(size: 28, weight: .bold, design: .monospaced))
@@ -259,7 +270,7 @@ struct GameControlPanel: View {
                 .padding(.vertical, 10)
             }
         }
-        .frame(width: 220)
+        .frame(width: 280)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
