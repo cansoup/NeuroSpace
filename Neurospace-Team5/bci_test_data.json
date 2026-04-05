@@ -1,0 +1,20 @@
+[
+  { "timestamp": 0.0, "activeArm": "left",  "moveX": -0.9, "moveY": 0.0,  "moveZ": 0.0,  "confidence": 0.95 },
+  { "timestamp": 0.1, "activeArm": "left",  "moveX": -0.8, "moveY": 0.1,  "moveZ": 0.0,  "confidence": 0.95 },
+  { "timestamp": 0.2, "activeArm": "left",  "moveX": -0.7, "moveY": 0.2,  "moveZ": 0.05, "confidence": 0.95 },
+  { "timestamp": 0.3, "activeArm": "left",  "moveX": -0.5, "moveY": 0.25, "moveZ": 0.1,  "confidence": 0.95 },
+  { "timestamp": 0.4, "activeArm": "left",  "moveX": -0.3, "moveY": 0.2,  "moveZ": 0.1,  "confidence": 0.95 },
+
+  { "timestamp": 0.5, "activeArm": "left",  "moveX": -0.1, "moveY": 0.1,  "moveZ": 0.05, "confidence": 0.95 },
+  { "timestamp": 0.6, "activeArm": "left",  "moveX":  0.0, "moveY": 0.0,  "moveZ": 0.0,  "confidence": 0.95 },
+
+  { "timestamp": 0.7, "activeArm": "right", "moveX":  0.5, "moveY": 0.0,  "moveZ": 0.0,  "confidence": 0.95 },
+  { "timestamp": 0.8, "activeArm": "right", "moveX":  0.7, "moveY": 0.1,  "moveZ": -0.05,"confidence": 0.95 },
+  { "timestamp": 0.9, "activeArm": "right", "moveX":  0.8, "moveY": 0.2,  "moveZ": -0.08,"confidence": 0.95 },
+  { "timestamp": 1.0, "activeArm": "right", "moveX":  0.9, "moveY": 0.25, "moveZ": -0.1, "confidence": 0.95 },
+  { "timestamp": 1.1, "activeArm": "right", "moveX":  0.7, "moveY": 0.2,  "moveZ": -0.08,"confidence": 0.95 },
+
+  { "timestamp": 1.2, "activeArm": "right", "moveX":  0.4, "moveY": 0.1,  "moveZ": -0.05,"confidence": 0.95 },
+  { "timestamp": 1.3, "activeArm": "right", "moveX":  0.2, "moveY": 0.05, "moveZ": -0.02,"confidence": 0.95 },
+  { "timestamp": 1.4, "activeArm": "right", "moveX":  0.0, "moveY": 0.0,  "moveZ": 0.0,  "confidence": 0.95 }
+]

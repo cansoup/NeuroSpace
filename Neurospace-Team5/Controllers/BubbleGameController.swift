@@ -47,6 +47,8 @@ final class BubbleGameController {
     private let assistRadius: Float = 0.18
     private let assistStrength: Float = 0.25
     private let popThreshold: Float = 0.06
+    private let directionBiasWeight: Float = 0.55
+    private let neutralIntentThreshold: Float = 0.08
 
     // Per-session hit counters (reset each stage)
     private var hitCount:     Int = 0
@@ -223,8 +225,8 @@ final class BubbleGameController {
 
         var newTip = currentArmState.tipPosition + currentArmState.velocity * deltaTime
 
-        // Assist toward nearest valid bubble for the active arm
-        if let targetBubble = nearestBubble() {
+        // Assist toward best bubble for the active arm, based on intent + distance
+        if let targetBubble = bestBubbleForCurrentIntent(from: newTip) {
             let toBubble = targetBubble.position - newTip
             let distance = simd_length(toBubble)
 
@@ -282,7 +284,7 @@ final class BubbleGameController {
     }
 
     var activeBubbleText: String {
-        guard let bubble = nearestBubble() else { return "None" }
+        guard let bubble = bestBubbleForCurrentIntent(from: currentArmState.tipPosition) else { return "None" }
         return format(bubble.position)
     }
 
@@ -305,13 +307,11 @@ final class BubbleGameController {
         var minDist: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-
             if stageConfig.isBilateral,
                let assigned = bubble.assignedArm,
                assigned != activeArm { continue }
 
             let d = simd_distance(bubble.position, currentArmState.tipPosition)
-
             if d < minDist {
                 minDist = d
                 closest = bubble
@@ -319,6 +319,46 @@ final class BubbleGameController {
         }
 
         return closest
+    }
+
+    private func bestBubbleForCurrentIntent(from tip: SIMD3<Float>) -> Bubble? {
+        let intentMagnitude = simd_length(targetDirection)
+
+        // If the input is nearly neutral, fall back to the closest valid bubble.
+        guard intentMagnitude > neutralIntentThreshold else {
+            return nearestBubble()
+        }
+
+        let intentDirection = simd_normalize(targetDirection)
+
+        var bestBubble: Bubble?
+        var bestScore: Float = -.greatestFiniteMagnitude
+
+        for bubble in bubbles where !bubble.isGone {
+            if stageConfig.isBilateral,
+               let assigned = bubble.assignedArm,
+               assigned != activeArm { continue }
+
+            let toBubble = bubble.position - tip
+            let distance = simd_length(toBubble)
+
+            if distance < 0.001 {
+                return bubble
+            }
+
+            let bubbleDirection = simd_normalize(toBubble)
+            let alignment = simd_dot(intentDirection, bubbleDirection)
+            let distanceScore = -distance
+
+            let score = distanceScore + (alignment * directionBiasWeight)
+
+            if score > bestScore {
+                bestScore = score
+                bestBubble = bubble
+            }
+        }
+
+        return bestBubble
     }
 
     private func autoPopIfTouching() {
@@ -352,8 +392,6 @@ final class BubbleGameController {
 
     private func updateBubbleLifecycle(deltaTime: Float) {
         if stageConfig.respawnsEnabled {
-            // Batch all position mutations into a local copy, then assign once
-            // to avoid triggering N @Observable notifications (one per bubble per frame)
             var updated = bubbles
             for i in updated.indices where !updated[i].isPopped {
                 if simd_length(updated[i].velocity) > 0.001 {

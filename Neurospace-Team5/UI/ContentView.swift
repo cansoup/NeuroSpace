@@ -1,18 +1,3 @@
-//
-//  ContentView.swift
-//  Neurospace-Team5
-//
-
-//
-//  ContentView.swift
-//  Neurospace-Team5
-//
-
-//
-//  ContentView.swift
-//  Neurospace-Team5
-//
-
 import SwiftUI
 
 struct ContentView: View {
@@ -88,6 +73,10 @@ struct LobbyView: View {
                     Text("Motion Vector: \(controller.motionVectorText)")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
+
+                    Text("Active Bubble: \(controller.activeBubbleText)")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
                 }
 
                 Divider()
@@ -138,6 +127,24 @@ struct LobbyView: View {
                     }
 
                     HStack(spacing: 8) {
+                        Button("Load JSON") {
+                            appModel.jsonPlayback.loadJSON(named: "bci_test_data")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Play JSON") {
+                            appModel.jsonPlayback.startPlayback(interval: 0.1)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
+
+                        Button("Stop JSON") {
+                            appModel.jsonPlayback.stopPlayback()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    /*HStack(spacing: 8) {
                         Button("Start Fake Headset") {
                             appModel.fakeBCIInput.start()
                         }
@@ -149,7 +156,7 @@ struct LobbyView: View {
                             appModel.gameController.stopMotion()
                         }
                         .buttonStyle(.bordered)
-                    }
+                    }*/
 
                     Button("Reset Game") {
                         controller.resetGame()

@@ -22,16 +22,14 @@ final class AppModel {
     }
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
-    var gameController: BubbleGameController
     var shouldEndSession: Bool = false
+    var gameController: BubbleGameController
 
-    let armMapper: BCIArmMapper
-    let fakeBCIInput: FakeBCIInputService
+    let jsonPlayback: BCIJSONPlaybackService
 
     init() {
         let controller = BubbleGameController()
         self.gameController = controller
-        self.armMapper = BCIArmMapper(controller: controller)
-        self.fakeBCIInput = FakeBCIInputService(mapper: self.armMapper)
+        self.jsonPlayback = BCIJSONPlaybackService(controller: controller)
     }
 }
