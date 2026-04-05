@@ -8,21 +8,21 @@ final class BubbleGameController {
 
     // MARK: - Public state
 
-    var currentIntent:   BCIIntent       = .idle
+    var currentIntent: BCIIntent = .idle
     var connectionState: ConnectionState = .disconnected
-    var sessionState:    SessionState    = .idle
+    var sessionState: SessionState = .idle
 
-    var activeArm:    ActiveArm = .right
-    var leftArmState:  ArmState = ArmState()
+    var activeArm: ActiveArm = .right
+    var leftArmState: ArmState = ArmState()
     var rightArmState: ArmState = ArmState()
 
     var bubbles: [Bubble] = []
-    var score:   Int      = 0
+    var score: Int = 0
 
     // Stage
-    var currentStage:      Int    = 1
+    var currentStage: Int = 1
     var targetBubbleColor: String = "Pink"
-    var accuracy:          Double = 0.0
+    var accuracy: Double = 0.0
 
     // Finish reason — used to distinguish Congrats from Mission Failed
     enum FinishReason { case allPopped, timeUp }
@@ -34,7 +34,9 @@ final class BubbleGameController {
 
     // Movement
     private var targetDirection: SIMD3<Float> = .zero
-    private let maxSpeed:     Float = 0.55
+    private var filteredDirection: SIMD3<Float> = .zero
+
+    private let maxSpeed: Float = 0.55
     private let acceleration: Float = 3.0
     private let deceleration: Float = 4.0
 
@@ -43,15 +45,18 @@ final class BubbleGameController {
     private let yLimit: ClosedRange<Float> = -0.10 ... 0.24
     private let zLimit: ClosedRange<Float> = -0.22 ... 0.22
 
-    // Bubble assist tuning
+    // Adaptive mapping tuning
     private let assistRadius: Float = 0.18
-    private let assistStrength: Float = 0.25
+    private let maxAssistStrength: Float = 0.28
     private let popThreshold: Float = 0.06
-    private let directionBiasWeight: Float = 0.55
+    private let directionBiasWeight: Float = 0.60
     private let neutralIntentThreshold: Float = 0.08
+    private let inputDeadzone: Float = 0.12
+    private let inputSmoothing: Float = 0.22
+    private let idleDecay: Float = 0.18
 
     // Per-session hit counters (reset each stage)
-    private var hitCount:     Int = 0
+    private var hitCount: Int = 0
     private var attemptCount: Int = 0
 
     // MARK: - Stage config
@@ -60,7 +65,9 @@ final class BubbleGameController {
 
     // MARK: - Init
 
-    init() { resetGame() }
+    init() {
+        resetGame()
+    }
 
     // MARK: - Session control
 
@@ -95,29 +102,33 @@ final class BubbleGameController {
         timerTask?.cancel()
         timerTask = nil
 
-        if !keepStage { currentStage = 1 }
+        if !keepStage {
+            currentStage = 1
+        }
 
-        currentIntent    = .idle
-        sessionState     = .ready
-        activeArm        = .right
-        score            = 0
-        hitCount         = 0
-        attemptCount     = 0
-        accuracy         = 0.0
-        finishReason     = nil
-        targetDirection  = .zero
+        currentIntent = .idle
+        sessionState = .ready
+        activeArm = .right
+        score = 0
+        hitCount = 0
+        attemptCount = 0
+        accuracy = 0.0
+        finishReason = nil
+        targetDirection = .zero
+        filteredDirection = .zero
         remainingSeconds = stageConfig.duration
 
         leftArmState = ArmState(
             basePosition: [-0.22, -0.14, 0.08],
-            tipPosition:  [-0.16,  0.02, 0.00],
-            velocity:     .zero,
+            tipPosition: [-0.16, 0.02, 0.00],
+            velocity: .zero,
             isPopTriggered: false
         )
+
         rightArmState = ArmState(
-            basePosition: [ 0.22, -0.14, 0.08],
-            tipPosition:  [ 0.16,  0.02, 0.00],
-            velocity:     .zero,
+            basePosition: [0.22, -0.14, 0.08],
+            tipPosition: [0.16, 0.02, 0.00],
+            velocity: .zero,
             isPopTriggered: false
         )
 
@@ -127,31 +138,33 @@ final class BubbleGameController {
     // MARK: - Stage progression
 
     var canAdvanceStage: Bool { currentStage < StageConfig.totalStages }
-
     var isOnFinalStage: Bool { currentStage >= StageConfig.totalStages }
 
     /// Advances to the next stage. No-op if already at final stage.
     func advanceStage() {
         guard canAdvanceStage else { return }
-        currentStage    += 1
-        hitCount         = 0
-        attemptCount     = 0
-        accuracy         = 0.0
-        finishReason     = nil
-        targetDirection  = .zero
-        sessionState     = .ready
+
+        currentStage += 1
+        hitCount = 0
+        attemptCount = 0
+        accuracy = 0.0
+        finishReason = nil
+        targetDirection = .zero
+        filteredDirection = .zero
+        sessionState = .ready
         remainingSeconds = stageConfig.duration
 
         leftArmState = ArmState(
             basePosition: [-0.22, -0.14, 0.08],
-            tipPosition:  [-0.16,  0.02, 0.00],
-            velocity:     .zero,
+            tipPosition: [-0.16, 0.02, 0.00],
+            velocity: .zero,
             isPopTriggered: false
         )
+
         rightArmState = ArmState(
-            basePosition: [ 0.22, -0.14, 0.08],
-            tipPosition:  [ 0.16,  0.02, 0.00],
-            velocity:     .zero,
+            basePosition: [0.22, -0.14, 0.08],
+            tipPosition: [0.16, 0.02, 0.00],
+            velocity: .zero,
             isPopTriggered: false
         )
 
@@ -165,17 +178,19 @@ final class BubbleGameController {
     }
 
     func setActiveArm(_ arm: ActiveArm) {
-        activeArm       = arm
+        activeArm = arm
         targetDirection = .zero
-        currentIntent   = .idle
+        filteredDirection = .zero
+        currentIntent = .idle
     }
 
     // MARK: - Intent / control
 
     func applyIntent(_ intent: BCIIntent) {
         guard stageConfig.isIntentAllowed(intent) else {
-            currentIntent   = .idle
+            currentIntent = .idle
             targetDirection = .zero
+            filteredDirection = .zero
             return
         }
 
@@ -183,29 +198,62 @@ final class BubbleGameController {
         currentArmState.isPopTriggered = false
 
         switch intent {
-        case .moveLeft:     targetDirection = [-1,  0,  0]
-        case .moveRight:    targetDirection = [ 1,  0,  0]
-        case .moveUp:       targetDirection = [ 0,  1,  0]
-        case .moveDown:     targetDirection = [ 0, -1,  0]
-        case .moveForward:  targetDirection = [ 0,  0, -1]
-        case .moveBackward: targetDirection = [ 0,  0,  1]
+        case .moveLeft:     targetDirection = [-1, 0, 0]
+        case .moveRight:    targetDirection = [1, 0, 0]
+        case .moveUp:       targetDirection = [0, 1, 0]
+        case .moveDown:     targetDirection = [0, -1, 0]
+        case .moveForward:  targetDirection = [0, 0, -1]
+        case .moveBackward: targetDirection = [0, 0, 1]
         case .idle:         targetDirection = .zero
         case .pop:          currentArmState.isPopTriggered = true
         }
+
+        filteredDirection = targetDirection
     }
 
+    /// Main entry point for BCI vectors.
     func applyControlVector(x: Float, y: Float, z: Float) {
-        currentIntent   = .idle
-        targetDirection = SIMD3<Float>(
-            max(-1, min(1, x)),
-            max(-1, min(1, y)),
-            max(-1, min(1, z))
+        currentIntent = .idle
+
+        var raw = SIMD3<Float>(
+            clampUnit(x),
+            clampUnit(y),
+            clampUnit(z)
         )
+
+        // Respect stage axis restrictions
+        if !stageConfig.allowedAxes.contains(.x) { raw.x = 0 }
+        if !stageConfig.allowedAxes.contains(.y) { raw.y = 0 }
+        if !stageConfig.allowedAxes.contains(.z) { raw.z = 0 }
+
+        // Deadzone
+        raw.x = abs(raw.x) < inputDeadzone ? 0 : raw.x
+        raw.y = abs(raw.y) < inputDeadzone ? 0 : raw.y
+        raw.z = abs(raw.z) < inputDeadzone ? 0 : raw.z
+
+        // Smooth noisy input
+        filteredDirection = simd_mix(
+            filteredDirection,
+            raw,
+            SIMD3<Float>(repeating: inputSmoothing)
+        )
+
+        // If input is almost idle, decay smoothly back to zero
+        if simd_length(raw) < 0.001 {
+            filteredDirection = simd_mix(
+                filteredDirection,
+                .zero,
+                SIMD3<Float>(repeating: idleDecay)
+            )
+        }
+
+        targetDirection = filteredDirection
     }
 
     func stopMotion() {
-        currentIntent   = .idle
+        currentIntent = .idle
         targetDirection = .zero
+        filteredDirection = .zero
     }
 
     // MARK: - Per-frame update
@@ -213,7 +261,7 @@ final class BubbleGameController {
     func update(deltaTime: Float) {
         guard sessionState == .playing || sessionState == .ready else { return }
 
-        let speedFactor    = simd_length(targetDirection) > 0 ? acceleration : deceleration
+        let speedFactor = simd_length(targetDirection) > 0 ? acceleration : deceleration
         let targetVelocity = targetDirection * maxSpeed
 
         currentArmState.velocity +=
@@ -225,15 +273,16 @@ final class BubbleGameController {
 
         var newTip = currentArmState.tipPosition + currentArmState.velocity * deltaTime
 
-        // Assist toward best bubble for the active arm, based on intent + distance
+        // Adaptive assist toward best bubble for the active arm
         if let targetBubble = bestBubbleForCurrentIntent(from: newTip) {
             let toBubble = targetBubble.position - newTip
             let distance = simd_length(toBubble)
 
             if distance < assistRadius && distance > 0.001 {
                 let direction = simd_normalize(toBubble)
-                let strength = (1.0 - (distance / assistRadius)) * assistStrength
-                newTip += direction * strength * deltaTime * 10.0
+                let closeness = 1.0 - (distance / assistRadius)
+                let adaptiveStrength = closeness * maxAssistStrength
+                newTip += direction * adaptiveStrength * deltaTime * 10.0
             }
         }
 
@@ -255,17 +304,13 @@ final class BubbleGameController {
         guard let idx = bubbles.firstIndex(where: { $0.id == id }),
               !bubbles[idx].isGone else { return }
 
-        // Bilateral: only the assigned arm may pop
         if stageConfig.isBilateral,
            let assigned = bubbles[idx].assignedArm,
-           assigned != activeArm { return }
+           assigned != activeArm {
+            return
+        }
 
-        bubbles[idx].isPopped = true
-        score        += 100
-        hitCount     += 1
-        attemptCount += 1
-        accuracy = Double(hitCount) / Double(attemptCount)
-
+        registerBubblePop(at: idx)
         checkSessionFinished()
     }
 
@@ -284,8 +329,10 @@ final class BubbleGameController {
     }
 
     var activeBubbleText: String {
-        guard let bubble = bestBubbleForCurrentIntent(from: currentArmState.tipPosition) else { return "None" }
-        return format(bubble.position)
+        guard let bubble = bestBubbleForCurrentIntent(from: currentArmState.tipPosition) else {
+            return "None"
+        }
+        return "\(bubble.type.displayName) \(format(bubble.position))"
     }
 
     private func format(_ v: SIMD3<Float>) -> String {
@@ -297,8 +344,11 @@ final class BubbleGameController {
     private var currentArmState: ArmState {
         get { activeArm == .left ? leftArmState : rightArmState }
         set {
-            if activeArm == .left { leftArmState = newValue }
-            else                  { rightArmState = newValue }
+            if activeArm == .left {
+                leftArmState = newValue
+            } else {
+                rightArmState = newValue
+            }
         }
     }
 
@@ -309,7 +359,9 @@ final class BubbleGameController {
         for bubble in bubbles where !bubble.isGone {
             if stageConfig.isBilateral,
                let assigned = bubble.assignedArm,
-               assigned != activeArm { continue }
+               assigned != activeArm {
+                continue
+            }
 
             let d = simd_distance(bubble.position, currentArmState.tipPosition)
             if d < minDist {
@@ -324,7 +376,7 @@ final class BubbleGameController {
     private func bestBubbleForCurrentIntent(from tip: SIMD3<Float>) -> Bubble? {
         let intentMagnitude = simd_length(targetDirection)
 
-        // If the input is nearly neutral, fall back to the closest valid bubble.
+        // If the user is basically neutral, use the nearest bubble.
         guard intentMagnitude > neutralIntentThreshold else {
             return nearestBubble()
         }
@@ -337,7 +389,9 @@ final class BubbleGameController {
         for bubble in bubbles where !bubble.isGone {
             if stageConfig.isBilateral,
                let assigned = bubble.assignedArm,
-               assigned != activeArm { continue }
+               assigned != activeArm {
+                continue
+            }
 
             let toBubble = bubble.position - tip
             let distance = simd_length(toBubble)
@@ -362,12 +416,16 @@ final class BubbleGameController {
     }
 
     private func autoPopIfTouching() {
+        var poppedAnyBubble = false
+
         for i in bubbles.indices {
             guard !bubbles[i].isGone else { continue }
 
             if stageConfig.isBilateral,
                let assigned = bubbles[i].assignedArm,
-               assigned != activeArm { continue }
+               assigned != activeArm {
+                continue
+            }
 
             let popRadius = max(stageConfig.bubbleRadius + 0.028, popThreshold)
 
@@ -378,26 +436,37 @@ final class BubbleGameController {
                     SIMD3<Float>(repeating: 0.4)
                 )
 
-                bubbles[i].isPopped = true
-                score        += 100
-                hitCount     += 1
-                attemptCount += 1
+                registerBubblePop(at: i)
+                poppedAnyBubble = true
             }
         }
 
-        if attemptCount > 0 {
+        if poppedAnyBubble && attemptCount > 0 {
             accuracy = Double(hitCount) / Double(attemptCount)
+            checkSessionFinished()
         }
+    }
+
+    private func registerBubblePop(at index: Int) {
+        guard bubbles.indices.contains(index), !bubbles[index].isGone else { return }
+
+        bubbles[index].isPopped = true
+        score += bubbles[index].type.points
+        hitCount += 1
+        attemptCount += 1
+        accuracy = Double(hitCount) / Double(attemptCount)
     }
 
     private func updateBubbleLifecycle(deltaTime: Float) {
         if stageConfig.respawnsEnabled {
             var updated = bubbles
+
             for i in updated.indices where !updated[i].isPopped {
                 if simd_length(updated[i].velocity) > 0.001 {
                     updated[i].position += updated[i].velocity * deltaTime
                 }
             }
+
             if updated.allSatisfy(\.isGone) {
                 bubbles = Self.generateBubbles(for: stageConfig)
             } else {
@@ -415,12 +484,16 @@ final class BubbleGameController {
         sessionState = .finished
     }
 
+    private func clampUnit(_ value: Float) -> Float {
+        max(-1, min(1, value))
+    }
+
     // MARK: - Bubble generation
 
     private static func generateBubbles(for config: StageConfig) -> [Bubble] {
         let xRange: ClosedRange<Float> = config.allowedAxes.contains(.x) ? -0.32 ... 0.32 : -0.02 ... 0.02
-        let yRange: ClosedRange<Float> = config.allowedAxes.contains(.y) ? -0.02 ... 0.18 :  0.08 ... 0.10
-        let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.14 ... 0.12 :  0.00 ... 0.00
+        let yRange: ClosedRange<Float> = config.allowedAxes.contains(.y) ? -0.02 ... 0.18 : 0.08 ... 0.10
+        let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.14 ... 0.12 : 0.00 ... 0.00
         let minDistance = config.bubbleRadius * 2.5
 
         var positions: [SIMD3<Float>] = []
@@ -428,11 +501,13 @@ final class BubbleGameController {
 
         while positions.count < config.bubbleCount && tries < 300 {
             tries += 1
+
             let candidate = SIMD3<Float>(
                 Float.random(in: xRange),
                 Float.random(in: yRange),
                 Float.random(in: zRange)
             )
+
             if !positions.contains(where: { simd_distance($0, candidate) < minDistance }) {
                 positions.append(candidate)
             }
@@ -441,17 +516,23 @@ final class BubbleGameController {
         return positions.map { position in
             let arm: ActiveArm? = config.isBilateral ? (position.x < 0 ? .left : .right) : nil
 
-            let speed  = Float.random(in: config.bubbleSpeed)
-            let rawDir = SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), 0)
+            let speed = Float.random(in: config.bubbleSpeed)
+            let rawDir = SIMD3<Float>(
+                Float.random(in: -1...1),
+                Float.random(in: -1...1),
+                0
+            )
+
             let velocity: SIMD3<Float> = (speed > 0.001 && simd_length(rawDir) > 0.001)
                 ? simd_normalize(rawDir) * speed
                 : .zero
 
             return Bubble(
-                position:    position,
+                position: position,
+                type: BubbleType.randomWeighted(),
                 assignedArm: arm,
-                velocity:    velocity,
-                lifetime:    config.bubbleLifetime
+                velocity: velocity,
+                lifetime: config.bubbleLifetime
             )
         }
     }

@@ -2,17 +2,6 @@
 //  ImmersiveView.swift
 //  Neurospace-Team5
 //
-//  Created by Shaiyan Haseen Khan on 16/3/2026.
-//
-//
-//  ImmersiveView.swift
-//  Neurospace-Team5
-//
-
-//
-//  ImmersiveView.swift
-//  Neurospace-Team5
-//
 
 import SwiftUI
 import RealityKit
@@ -22,10 +11,10 @@ struct ImmersiveView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         RealityView { content, attachments in
-            // World anchor: fixed in real-world space at eye level, 1.2 m in front of origin
             let worldAnchor = AnchorEntity(world: SIMD3<Float>(0, 1.5, -1.2))
             worldAnchor.name = "WorldAnchor"
 
@@ -89,7 +78,6 @@ struct ImmersiveView: View {
                 let rightGlow = root.findEntity(named: "RightArmGlow") as? ModelEntity
             else { return }
 
-            // Physics is driven by the .task below — this closure only syncs entities to model state.
             let controller = appModel.gameController
 
             updateArm(
@@ -122,24 +110,33 @@ struct ImmersiveView: View {
                 .onEnded { value in
                     let name = value.entity.name
                     guard name.hasPrefix("Bubble_") else { return }
+
                     let uuidString = String(name.dropFirst("Bubble_".count))
                     guard let id = UUID(uuidString: uuidString) else { return }
+
                     appModel.gameController.popBubble(withID: id)
                 }
         )
         .onChange(of: appModel.gameController.sessionState) { _, newState in
             guard newState == .finished else { return }
-            switch appModel.gameController.finishReason {
-            case .allPopped: openWindow(id: appModel.congratsWindowID)
-            default:         openWindow(id: appModel.missionFailedWindowID)
+
+            Task { @MainActor in
+                // Always clear old result windows first
+                dismissWindow(id: appModel.congratsWindowID)
+                dismissWindow(id: appModel.missionFailedWindowID)
+
+                switch appModel.gameController.finishReason {
+                case .allPopped:
+                    openWindow(id: appModel.congratsWindowID)
+                default:
+                    openWindow(id: appModel.missionFailedWindowID)
+                }
             }
         }
         .task { @MainActor in
-            // Physics loop runs independently of the render loop.
-            // Decoupled from the update closure to prevent a feedback cycle where
-            // controller.update() triggers @Observable → update closure → controller.update() again.
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
+
                 do {
                     try await Task.sleep(for: .seconds(1.0 / 60.0))
                 } catch {
@@ -155,9 +152,13 @@ struct ImmersiveView: View {
             Task { @MainActor in
                 appModel.gameController.resetGame()
 
+                dismissWindow(id: appModel.congratsWindowID)
+                dismissWindow(id: appModel.missionFailedWindowID)
+
                 if appModel.immersiveSpaceState == .open {
                     appModel.immersiveSpaceState = .inTransition
                     await dismissImmersiveSpace()
+                    appModel.immersiveSpaceState = .closed
                 }
 
                 openWindow(id: appModel.mainWindowID)
@@ -241,45 +242,45 @@ struct ImmersiveView: View {
     }
 
     private func makeBubbleEntity(for bubble: Bubble) -> ModelEntity {
-        // Colour indicates arm assignment: cyan = left, orange = right, purple = unassigned
-        let tint: UIColor
-        switch bubble.assignedArm {
-        case .left:  tint = UIColor.systemCyan.withAlphaComponent(0.65)
-        case .right: tint = UIColor.systemOrange.withAlphaComponent(0.65)
-        case nil:    tint = UIColor.systemPurple.withAlphaComponent(0.55)
-        }
-
         let radius = appModel.gameController.stageConfig.bubbleRadius
 
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: tint)
-        material.roughness = .init(floatLiteral: 0.1)
+        material.baseColor = .init(tint: bubble.type.uiColor.withAlphaComponent(0.78))
+        material.roughness = .init(floatLiteral: 0.08)
+        material.metallic = .init(floatLiteral: bubble.type == .gold ? 0.35 : 0.05)
 
         let entity = ModelEntity(
             mesh: .generateSphere(radius: radius),
             materials: [material]
         )
+
         entity.name = "Bubble_\(bubble.id.uuidString)"
         entity.position = bubble.position
         entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
         entity.components.set(InputTargetComponent())
+
         return entity
     }
 
     private func syncBubbles(in root: Entity, with bubbles: [Bubble]) {
         let validNames = Set(bubbles.filter { !$0.isGone }.map { "Bubble_\($0.id.uuidString)" })
 
-        // Snapshot before removing to avoid mutating root.children during iteration
         let toRemove = root.children.filter {
             $0.name.hasPrefix("Bubble_") && !validNames.contains($0.name)
         }
         toRemove.forEach { $0.removeFromParent() }
 
-        // Add new entities or update positions of existing ones (for moving bubbles)
         for bubble in bubbles where !bubble.isGone {
             let name = "Bubble_\(bubble.id.uuidString)"
-            if let existing = root.findEntity(named: name) {
+
+            if let existing = root.findEntity(named: name) as? ModelEntity {
                 existing.position = bubble.position
+
+                if var material = existing.model?.materials.first as? PhysicallyBasedMaterial {
+                    material.baseColor = .init(tint: bubble.type.uiColor.withAlphaComponent(0.78))
+                    material.metallic = .init(floatLiteral: bubble.type == .gold ? 0.35 : 0.05)
+                    existing.model?.materials = [material]
+                }
             } else {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
