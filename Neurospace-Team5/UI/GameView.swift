@@ -42,25 +42,26 @@ struct CongratsView: View {
 
             Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
                 Task { @MainActor in
-                    dismiss()
-                    let willAdvance = appModel.gameController.canAdvanceStage
-                    appModel.gameController.advanceStage()
+                    if appModel.gameController.canAdvanceStage {
+                        appModel.gameController.advanceStage()
 
-                    if willAdvance {
-                        // Continue in immersive space with the next stage
-                        if appModel.immersiveSpaceState != .open {
+                        if appModel.immersiveSpaceState == .open {
+                            // Immersive space is already running — start next stage in-place
+                            appModel.gameController.startSession()
+                            dismiss()
+                        } else {
+                            // Reopen immersive space for the next stage
                             appModel.immersiveSpaceState = .inTransition
                             if case .opened = await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                                 appModel.gameController.startSession()
                             } else {
                                 appModel.immersiveSpaceState = .closed
-                                openWindow(id: appModel.mainWindowID)
                             }
-                        } else {
-                            appModel.gameController.startSession()
+                            dismiss()
                         }
                     } else {
                         // Final stage cleared — return to lobby
+                        dismiss()
                         appModel.gameController.resetGame()
                         if appModel.immersiveSpaceState == .open {
                             appModel.immersiveSpaceState = .inTransition
@@ -229,7 +230,18 @@ struct GameControlPanel: View {
 
                 Divider().opacity(0.3)
 
-                HStack(spacing: 20) {
+                HStack(spacing: 14) {
+                    VStack(spacing: 2) {
+                        Text("\(controller.currentStage)/\(StageConfig.totalStages)")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("STAGE")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1)
+                    }
+
+                    Divider().frame(height: 30).opacity(0.3)
+
                     VStack(spacing: 2) {
                         Text(timeString)
                             .font(.system(size: 28, weight: .bold, design: .monospaced))
@@ -258,7 +270,7 @@ struct GameControlPanel: View {
                 .padding(.vertical, 10)
             }
         }
-        .frame(width: 220)
+        .frame(width: 280)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }

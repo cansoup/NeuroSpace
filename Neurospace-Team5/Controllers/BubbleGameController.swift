@@ -124,15 +124,11 @@ final class BubbleGameController {
 
     // MARK: - Stage progression
 
-    var canAdvanceStage: Bool {
-        guard currentStage < StageConfig.totalStages else { return false }
-        let c = stageConfig.unlockCriteria
-        return accuracy >= c.minimumAccuracy && hitCount >= c.requiredPops
-    }
+    var canAdvanceStage: Bool { currentStage < StageConfig.totalStages }
 
     var isOnFinalStage: Bool { currentStage >= StageConfig.totalStages }
 
-    /// Advances to the next stage. No-op if criteria not met or already at final stage.
+    /// Advances to the next stage. No-op if already at final stage.
     func advanceStage() {
         guard canAdvanceStage else { return }
         currentStage    += 1
@@ -355,14 +351,20 @@ final class BubbleGameController {
     }
 
     private func updateBubbleLifecycle(deltaTime: Float) {
-        for i in bubbles.indices where !bubbles[i].isPopped {
-            if simd_length(bubbles[i].velocity) > 0.001 {
-                bubbles[i].position += bubbles[i].velocity * deltaTime
+        if stageConfig.respawnsEnabled {
+            // Batch all position mutations into a local copy, then assign once
+            // to avoid triggering N @Observable notifications (one per bubble per frame)
+            var updated = bubbles
+            for i in updated.indices where !updated[i].isPopped {
+                if simd_length(updated[i].velocity) > 0.001 {
+                    updated[i].position += updated[i].velocity * deltaTime
+                }
             }
-        }
-
-        if stageConfig.respawnsEnabled && bubbles.allSatisfy(\.isGone) {
-            bubbles = Self.generateBubbles(for: stageConfig)
+            if updated.allSatisfy(\.isGone) {
+                bubbles = Self.generateBubbles(for: stageConfig)
+            } else {
+                bubbles = updated
+            }
             return
         }
 

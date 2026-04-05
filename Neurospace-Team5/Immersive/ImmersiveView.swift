@@ -89,8 +89,8 @@ struct ImmersiveView: View {
                 let rightGlow = root.findEntity(named: "RightArmGlow") as? ModelEntity
             else { return }
 
+            // Physics is driven by the .task below — this closure only syncs entities to model state.
             let controller = appModel.gameController
-            controller.update(deltaTime: 1.0 / 60.0)
 
             updateArm(
                 body: leftArmBody,
@@ -132,6 +132,19 @@ struct ImmersiveView: View {
             switch appModel.gameController.finishReason {
             case .allPopped: openWindow(id: appModel.congratsWindowID)
             default:         openWindow(id: appModel.missionFailedWindowID)
+            }
+        }
+        .task { @MainActor in
+            // Physics loop runs independently of the render loop.
+            // Decoupled from the update closure to prevent a feedback cycle where
+            // controller.update() triggers @Observable → update closure → controller.update() again.
+            while !Task.isCancelled {
+                appModel.gameController.update(deltaTime: 1.0 / 60.0)
+                do {
+                    try await Task.sleep(for: .seconds(1.0 / 60.0))
+                } catch {
+                    break
+                }
             }
         }
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
@@ -254,18 +267,20 @@ struct ImmersiveView: View {
     }
 
     private func syncBubbles(in root: Entity, with bubbles: [Bubble]) {
-        // Remove entities that no longer exist in the current bubbles array (e.g. after reset)
         let validNames = Set(bubbles.filter { !$0.isGone }.map { "Bubble_\($0.id.uuidString)" })
-        for child in root.children where child.name.hasPrefix("Bubble_") {
-            if !validNames.contains(child.name) {
-                child.removeFromParent()
-            }
-        }
 
-        // Add entities for new / respawned bubbles
+        // Snapshot before removing to avoid mutating root.children during iteration
+        let toRemove = root.children.filter {
+            $0.name.hasPrefix("Bubble_") && !validNames.contains($0.name)
+        }
+        toRemove.forEach { $0.removeFromParent() }
+
+        // Add new entities or update positions of existing ones (for moving bubbles)
         for bubble in bubbles where !bubble.isGone {
             let name = "Bubble_\(bubble.id.uuidString)"
-            if root.findEntity(named: name) == nil {
+            if let existing = root.findEntity(named: name) {
+                existing.position = bubble.position
+            } else {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
         }
