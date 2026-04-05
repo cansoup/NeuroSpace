@@ -206,8 +206,6 @@ struct LobbyView: View {
     private var startSection: some View {
         Button {
             Task { @MainActor in
-                controller.startSession()
-
                 if appModel.immersiveSpaceState == .closed {
                     appModel.immersiveSpaceState = .inTransition
 

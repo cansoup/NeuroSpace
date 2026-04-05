@@ -13,9 +13,15 @@ struct ImmersiveView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
+    @State private var startHoverBeganAt: Date? = nil
+    @State private var startTargetHighlighted = false
+
+    private let startOrbPosition = SIMD3<Float>(0.0, -0.06, 0.02)
+    private let startPanelPosition = SIMD3<Float>(0.0, 0.20, 0.02)
+
     var body: some View {
         RealityView { content, attachments in
-            let worldAnchor = AnchorEntity(world: SIMD3<Float>(0, 1.5, -1.2))
+            let worldAnchor = AnchorEntity(world: SIMD3<Float>(0, 1.45, -1.0))
             worldAnchor.name = "WorldAnchor"
 
             let root = Entity()
@@ -52,18 +58,35 @@ struct ImmersiveView: View {
             root.addChild(leftGlow)
             root.addChild(rightGlow)
 
-            for bubble in appModel.gameController.bubbles where !bubble.isGone {
-                root.addChild(makeBubbleEntity(for: bubble))
+            // IMPORTANT:
+            // Only add gameplay bubbles after the session has started.
+            if appModel.gameController.sessionState != .ready {
+                for bubble in appModel.gameController.bubbles where !bubble.isGone {
+                    root.addChild(makeBubbleEntity(for: bubble))
+                }
             }
 
-            worldAnchor.addChild(root)
+            let startOrb = makeStartOrbEntity(
+                name: "StartOrb",
+                position: startOrbPosition,
+                highlighted: false
+            )
+            root.addChild(startOrb)
 
             if let panel = attachments.entity(for: "controlPanel") {
                 panel.name = "ControlPanel"
-                panel.position = SIMD3<Float>(0.55, 0.25, 0)
-                worldAnchor.addChild(panel)
+                panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
+                panel.scale = SIMD3<Float>(repeating: 0.92)
+                root.addChild(panel)
             }
 
+            if let startPanel = attachments.entity(for: "startPanel") {
+                startPanel.name = "StartPanel"
+                startPanel.position = startPanelPosition
+                root.addChild(startPanel)
+            }
+
+            worldAnchor.addChild(root)
             content.add(worldAnchor)
 
         } update: { content, _ in
@@ -75,7 +98,8 @@ struct ImmersiveView: View {
                 let rightArmBody = root.findEntity(named: "RightArmBody") as? ModelEntity,
                 let rightTip = root.findEntity(named: "RightArmTip") as? ModelEntity,
                 let leftGlow = root.findEntity(named: "LeftArmGlow") as? ModelEntity,
-                let rightGlow = root.findEntity(named: "RightArmGlow") as? ModelEntity
+                let rightGlow = root.findEntity(named: "RightArmGlow") as? ModelEntity,
+                let startOrb = root.findEntity(named: "StartOrb") as? ModelEntity
             else { return }
 
             let controller = appModel.gameController
@@ -96,12 +120,38 @@ struct ImmersiveView: View {
                 isActive: controller.activeArm == .right
             )
 
-            syncBubbles(in: root, with: controller.bubbles)
+            // IMPORTANT:
+            // Only show/sync gameplay bubbles after session start.
+            if controller.sessionState == .ready {
+                removeAllBubbleEntities(from: root)
+            } else {
+                syncBubbles(in: root, with: controller.bubbles)
+            }
+
+            let showStartTarget = controller.sessionState == .ready
+
+            startOrb.isEnabled = showStartTarget
+            startOrb.position = startOrbPosition
+            updateStartOrbAppearance(startOrb, highlighted: startTargetHighlighted, visible: showStartTarget)
+
+            if let startPanel = root.findEntity(named: "StartPanel") {
+                startPanel.isEnabled = showStartTarget
+                startPanel.position = startPanelPosition
+            }
+
+            if let panel = root.findEntity(named: "ControlPanel") {
+                panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
+                panel.scale = SIMD3<Float>(repeating: 0.92)
+            }
 
         } attachments: {
             Attachment(id: "controlPanel") {
                 GameControlPanel()
                     .environment(appModel)
+            }
+
+            Attachment(id: "startPanel") {
+                ImmersiveStartPanel(isHighlighted: startTargetHighlighted)
             }
         }
         .gesture(
@@ -109,6 +159,12 @@ struct ImmersiveView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in
                     let name = value.entity.name
+
+                    if name == "StartOrb", appModel.gameController.sessionState == .ready {
+                        triggerSessionStart()
+                        return
+                    }
+
                     guard name.hasPrefix("Bubble_") else { return }
 
                     let uuidString = String(name.dropFirst("Bubble_".count))
@@ -118,10 +174,14 @@ struct ImmersiveView: View {
                 }
         )
         .onChange(of: appModel.gameController.sessionState) { _, newState in
+            if newState != .ready {
+                startHoverBeganAt = nil
+                startTargetHighlighted = false
+            }
+
             guard newState == .finished else { return }
 
             Task { @MainActor in
-                // Always clear old result windows first
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
 
@@ -136,6 +196,7 @@ struct ImmersiveView: View {
         .task { @MainActor in
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
+                updatePreSessionStartInteraction()
 
                 do {
                     try await Task.sleep(for: .seconds(1.0 / 60.0))
@@ -151,6 +212,8 @@ struct ImmersiveView: View {
 
             Task { @MainActor in
                 appModel.gameController.resetGame()
+                startHoverBeganAt = nil
+                startTargetHighlighted = false
 
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
@@ -165,6 +228,51 @@ struct ImmersiveView: View {
             }
         }
     }
+
+    // MARK: - Pre-session Start Interaction
+
+    @MainActor
+    private func updatePreSessionStartInteraction() {
+        let controller = appModel.gameController
+
+        guard controller.sessionState == .ready else {
+            startHoverBeganAt = nil
+            startTargetHighlighted = false
+            return
+        }
+
+        let activeTip = controller.activeArm == .left
+            ? controller.leftArmState.tipPosition
+            : controller.rightArmState.tipPosition
+
+        let distance = simd_distance(activeTip, startOrbPosition)
+        let hoverRadius: Float = 0.10
+        let dwellDuration: TimeInterval = 0.45
+
+        if distance <= hoverRadius {
+            startTargetHighlighted = true
+
+            if startHoverBeganAt == nil {
+                startHoverBeganAt = Date()
+            } else if let began = startHoverBeganAt,
+                      Date().timeIntervalSince(began) >= dwellDuration {
+                triggerSessionStart()
+            }
+        } else {
+            startHoverBeganAt = nil
+            startTargetHighlighted = false
+        }
+    }
+
+    @MainActor
+    private func triggerSessionStart() {
+        guard appModel.gameController.sessionState == .ready else { return }
+        startHoverBeganAt = nil
+        startTargetHighlighted = false
+        appModel.gameController.startSession()
+    }
+
+    // MARK: - Entity Builders
 
     private func makeArmBodyEntity(name: String, color: UIColor) -> ModelEntity {
         var material = PhysicallyBasedMaterial()
@@ -203,6 +311,37 @@ struct ImmersiveView: View {
         return entity
     }
 
+    private func makeStartOrbEntity(name: String, position: SIMD3<Float>, highlighted: Bool) -> ModelEntity {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
+        material.emissiveColor = .init(color: highlighted ? .white : .systemPink)
+
+        let entity = ModelEntity(
+            mesh: .generateSphere(radius: highlighted ? 0.055 : 0.045),
+            materials: [material]
+        )
+        entity.name = name
+        entity.position = position
+        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.06)]))
+        entity.components.set(InputTargetComponent())
+
+        return entity
+    }
+
+    private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
+        entity.scale = visible
+            ? (highlighted ? SIMD3<Float>(repeating: 1.18) : SIMD3<Float>(repeating: 1.0))
+            : SIMD3<Float>(repeating: 0.001)
+
+        if var material = entity.model?.materials.first as? PhysicallyBasedMaterial {
+            material.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
+            material.emissiveColor = .init(color: highlighted ? .white : .systemPink)
+            entity.model?.materials = [material]
+        }
+    }
+
+    // MARK: - Arm Updates
+
     private func updateArm(
         body: ModelEntity,
         tip: ModelEntity,
@@ -240,6 +379,8 @@ struct ImmersiveView: View {
             tip.model?.materials = [tipMaterial]
         }
     }
+
+    // MARK: - Bubble Rendering
 
     private func makeBubbleEntity(for bubble: Bubble) -> ModelEntity {
         let radius = appModel.gameController.stageConfig.bubbleRadius
@@ -285,5 +426,36 @@ struct ImmersiveView: View {
                 root.addChild(makeBubbleEntity(for: bubble))
             }
         }
+    }
+
+    private func removeAllBubbleEntities(from root: Entity) {
+        let bubbles = root.children.filter { $0.name.hasPrefix("Bubble_") }
+        bubbles.forEach { $0.removeFromParent() }
+    }
+}
+
+// MARK: - Immersive Start Panel
+
+struct ImmersiveStartPanel: View {
+    let isHighlighted: Bool
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("Ready to Begin?")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+
+            Text("Move the active arm onto the glowing orb to start.")
+                .font(.system(size: 13, weight: .medium))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
+            Text(isHighlighted ? "Hold steady..." : "Awaiting arm input")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isHighlighted ? .green : .purple)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .frame(width: 260)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
     }
 }
