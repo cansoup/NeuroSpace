@@ -217,6 +217,34 @@ struct GameControlPanel: View {
         }
     }
 
+    // Stage progression
+    private var stageProgress: Double {
+        if controller.stageConfig.respawnsEnabled {
+            let total = Double(controller.stageConfig.duration)
+            guard total > 0 else { return 0 }
+            return min(1.0 - Double(controller.remainingSeconds) / total, 1.0)
+        } else {
+            let total = controller.bubbles.count
+            guard total > 0 else { return 0 }
+            return Double(controller.bubbles.filter { $0.isPopped }.count) / Double(total)
+        }
+    }
+
+    private var progressLabel: String {
+        if controller.stageConfig.respawnsEnabled {
+            return "\(controller.score) pts"
+        }
+        let popped = controller.bubbles.filter { $0.isPopped }.count
+        let total = controller.bubbles.count
+        return "\(popped) / \(total) bubbles"
+    }
+
+    private func stageIndicatorColor(for stage: Int) -> Color {
+        if stage < controller.currentStage { return .purple }
+        if stage == controller.currentStage { return .white }
+        return .white.opacity(0.2)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if confirmingStop {
@@ -308,7 +336,53 @@ struct GameControlPanel: View {
                             .tracking(1)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+
+                Divider().opacity(0.3)
+
+                // Progression bar
+                VStack(spacing: 6) {
+                    HStack {
+                        HStack(spacing: 5) {
+                            ForEach(1...StageConfig.totalStages, id: \.self) { stage in
+                                Capsule()
+                                    .fill(stageIndicatorColor(for: stage))
+                                    .frame(height: 4)
+                                    .animation(.easeInOut(duration: 0.4), value: controller.currentStage)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    HStack {
+                        Text(controller.stageConfig.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(progressLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(.white.opacity(0.12))
+                                .frame(height: 6)
+                            Capsule()
+                                .fill(stageProgress >= 1.0 ? Color.green : Color.purple)
+                                .frame(width: geo.size.width * CGFloat(stageProgress), height: 6)
+                                .animation(.easeOut(duration: 0.3), value: stageProgress)
+                        }
+                    }
+                    .frame(height: 6)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 14)
             }
         }
         .frame(width: 320)
