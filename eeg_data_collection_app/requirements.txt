@@ -1,0 +1,20 @@
+# EEG Data Collection App - Requirements
+
+# GUI Framework
+PyQt5>=5.15.0
+
+# Real-time plotting
+pyqtgraph>=0.13.0
+
+# EEG data handling
+mne>=1.0.0
+numpy>=1.20.0
+
+# Data formats
+pyxdf>=1.16.0
+
+# Hardware interface (optional - will run in mock mode if not available)
+brainflow>=5.0.0
+
+# Optional: Lab Streaming Layer support
+# pylsl>=1.16.0
