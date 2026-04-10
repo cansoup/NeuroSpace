@@ -1,231 +1,251 @@
-# EEG Data Collection App
+# EEG Data Collection Application
 
-Desktop application for collecting motor imagery EEG data using OpenBCI headset.
+Desktop application for collecting motor imagery EEG data using OpenBCI Cyton headset.
 
-## Features
+## Overview
 
-- ✅ Real-time 8-channel EEG visualization
-- ✅ 4-class motor imagery tasks (left, right, down, up)
-- ✅ Randomized trial presentation
-- ✅ Visual cues with arrows and instructions
-- ✅ Event marker logging
-- ✅ Save data in XDF or GDF format
-- ✅ Mock mode for testing without hardware
+This application facilitates the collection of EEG data for 4-class motor imagery tasks. The system provides real-time visualization of 8-channel EEG signals, automated trial sequencing, and standardized data export formats.
 
-## Installation
+## Requirements
 
-### 1. Install Python Dependencies
+### Hardware
+- OpenBCI Cyton 8-channel EEG headset
+- USB dongle for wireless communication
+- Computer running Windows, macOS, or Linux
+
+### Software Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Install BrainFlow for Hardware Support
+Required packages:
+- PyQt5 (GUI framework)
+- pyqtgraph (real-time plotting)
+- mne (EEG data handling)
+- numpy (numerical operations)
+- pyxdf (XDF file format)
+- brainflow (OpenBCI interface)
 
-```bash
-pip install brainflow
-```
+## Installation
 
-**Note**: App will run in MOCK mode if BrainFlow is not installed. This is useful for testing the interface before connecting real hardware.
+1. Clone the repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Verify BrainFlow installation: `pip install brainflow`
 
 ## Usage
 
-### Quick Start
+### Starting the Application
 
 ```bash
 python main.py
 ```
 
-### With OpenBCI Headset
+### Data Collection Workflow
 
-1. **Connect Hardware**:
+1. **Hardware Setup**
    - Power on OpenBCI Cyton headset
-   - Connect via USB dongle to computer
-   - Note the COM port (e.g., COM3 on Windows)
+   - Connect USB dongle to computer
+   - Note the COM port (Windows Device Manager → Ports)
 
-2. **Launch App**:
-   ```bash
-   python main.py
-   ```
-
-3. **Configure Session**:
-   - Click "Connect Headset"
-   - Enter Subject ID (e.g., "S001")
-   - Set trials per class (default: 3)
+2. **Application Setup**
+   - Click "Connect Headset" button
+   - Enter subject identifier (e.g., "S001")
+   - Configure trials per class (default: 3)
    - Set trial duration (default: 4 seconds)
 
-4. **Record Data**:
+3. **Recording Session**
    - Click "Start Recording"
-   - Follow on-screen cues:
-     - **← LEFT**: Imagine moving left hand
-     - **RIGHT →**: Imagine moving right hand
-     - **↓ DOWN**: Imagine moving feet
-     - **↑ UP**: Imagine moving tongue
-   - App will guide through all trials automatically
+   - Application presents visual cues in randomized order
+   - Subject performs motor imagery tasks as indicated
+   - Session runs automatically through all trials
 
-5. **Save Data**:
-   - Click "Stop & Save" when finished
-   - Choose format: XDF, GDF, or both
-   - Data saved to `output/` directory
+4. **Data Export**
+   - Click "Stop & Save" upon completion
+   - Select output format: XDF, GDF, or both
+   - Files saved to `output/` directory
 
-## Trial Sequence
+## Motor Imagery Tasks
 
-Each trial follows this pattern:
+The application supports four motor imagery classes:
+
+- **Left**: Left hand movement imagery
+- **Right**: Right hand movement imagery
+- **Down**: Foot movement imagery
+- **Up**: Tongue movement imagery
+
+Each trial presents visual cues with directional arrows and text instructions.
+
+## Trial Structure
 
 ```
-Get Ready (2s) → Task Cue (4s) → Rest (2s) → Next trial
+Ready Phase (2s) → Task Execution (4s) → Rest Period (2s) → Next Trial
 ```
 
-**Total trials**: 12 (3 per class × 4 classes)
-**Total duration**: ~2 minutes
+Default configuration:
+- 3 trials per class
+- 4 classes total
+- 12 trials per session
+- Approximately 2 minutes total duration
 
-Trials are presented in randomized order to avoid bias.
+Trials are randomized to minimize order effects.
 
 ## Event Markers
 
-Event codes logged in data files:
+The application logs event markers with the following codes:
 
-| Code | Event |
-|------|-------|
-| 32766 | Session start |
-| 768 | Trial start |
-| 769 | Left hand cue |
-| 770 | Right hand cue |
-| 771 | Foot cue (down) |
-| 772 | Tongue cue (up) |
-| 782 | Trial end |
+| Code  | Description        |
+|-------|--------------------|
+| 32766 | Session start      |
+| 768   | Trial start        |
+| 769   | Left hand cue      |
+| 770   | Right hand cue     |
+| 771   | Foot cue           |
+| 772   | Tongue cue         |
+| 782   | Trial end          |
 
-## Output Files
+These markers are synchronized with EEG data for offline analysis.
 
-### XDF Format
-- Standard format for EEG/BCI recordings
-- Contains 2 streams: EEG data + markers
-- Compatible with EEGLAB, MNE, and other tools
-- File: `output/<subject_id>.xdf`
+## Data Formats
 
-### GDF Format
-- General Data Format for biosignals
-- Compatible with BCI Competition datasets
-- Includes event annotations
-- File: `output/<subject_id>.gdf`
+### XDF (Extensible Data Format)
+- Industry standard for multimodal recordings
+- Contains two streams: EEG data and event markers
+- Compatible with EEGLAB, MNE-Python, and other analysis tools
+- Filename: `output/<subject_id>.xdf`
 
-## Testing Without Hardware
-
-The app includes MOCK mode for development and testing:
-
-1. Launch app normally: `python main.py`
-2. Click "Connect Headset"
-3. App will automatically switch to mock mode if no hardware detected
-4. Mock data simulates realistic EEG signals
-5. All features work identically to real mode
+### GDF (General Data Format)
+- Biosignal format used in BCI competitions
+- Includes event annotations as MNE annotations
+- Compatible with existing preprocessing pipeline
+- Filename: `output/<subject_id>.gdf`
 
 ## Configuration
 
-Edit `config.py` to customize:
+Modify `config.py` to adjust application parameters:
 
 ```python
-# Number of trials
-TRIALS_PER_TASK = 3
+# Hardware settings
+N_CHANNELS = 8
+SAMPLING_RATE = 250  # Hz
 
-# Duration settings
+# Task parameters
+TASKS = ['left', 'right', 'down', 'up']
+TRIALS_PER_TASK = 3
 TRIAL_DURATION = 4.0  # seconds
 REST_DURATION = 2.0   # seconds
 
-# Tasks
-TASKS = ['left', 'right', 'down', 'up']
-
-# Event markers
-MARKERS = {...}
+# Event marker codes
+MARKERS = {
+    'session_start': 32766,
+    'trial_start': 768,
+    'left_cue': 769,
+    'right_cue': 770,
+    'down_cue': 771,
+    'up_cue': 772,
+    'trial_end': 782
+}
 ```
 
-## Troubleshooting
-
-### "Failed to connect to headset"
-- Check USB dongle is connected
-- Verify COM port is correct
-- Check headset is powered on
-- Try different USB port
-- App will switch to mock mode automatically
-
-### "No module named 'brainflow'"
-- Install BrainFlow: `pip install brainflow`
-- Or run in mock mode (works without BrainFlow)
-
-### "No module named 'PyQt5'"
-- Install dependencies: `pip install -r requirements.txt`
-
-### EEG plots not updating
-- Check headset is streaming
-- Try reconnecting headset
-- Restart application
-
-### Data file not saved
-- Check output directory exists
-- Verify write permissions
-- Check at least one format (XDF/GDF) is selected
-
-## Data Collection Protocol (For Class)
-
-When collecting data from team members:
-
-1. **Setup** (5 minutes):
-   - Place EEG cap on participant
-   - Check signal quality
-   - Explain task to participant
-
-2. **Practice** (optional):
-   - Run one practice session without saving
-   - Participant gets familiar with cues
-
-3. **Recording** (~2 minutes):
-   - Enter participant ID
-   - Click "Start Recording"
-   - Participant follows cues
-   - Don't interrupt during recording
-
-4. **Save and Next** (1 minute):
-   - Verify data saved successfully
-   - Move to next participant
-
-**Time per participant**: ~8-10 minutes total
-
-## File Structure
+## Application Structure
 
 ```
 eeg_data_collection_app/
 ├── main.py                  # Application entry point
-├── config.py                # Configuration
+├── config.py                # Configuration parameters
+├── requirements.txt         # Python dependencies
 ├── gui/
-│   ├── main_window.py       # Main GUI window
-│   ├── eeg_plotter.py       # Real-time EEG plots
-│   └── cue_display.py       # Task cue display
+│   ├── main_window.py       # Main application window
+│   ├── eeg_plotter.py       # Real-time signal visualization
+│   └── cue_display.py       # Task cue presentation
 ├── data/
-│   ├── headset_interface.py # OpenBCI interface
-│   ├── event_logger.py      # Event marker logging
-│   └── data_saver.py        # XDF/GDF saving
-├── output/                  # Saved data files
-├── requirements.txt
-└── README.md
+│   ├── headset_interface.py # OpenBCI hardware interface
+│   ├── event_logger.py      # Event marker management
+│   └── data_saver.py        # File export functionality
+└── output/                  # Data output directory
 ```
 
-## Next Steps
+## Troubleshooting
 
-After collecting data:
+### Connection Failures
+- Verify headset power status
+- Check USB dongle connection
+- Confirm correct COM port
+- Try different USB port if issues persist
 
-1. **Load data** using your existing `pyxdf` or `mne` tools
-2. **Preprocess** using your pipeline (`bci_ml_pipeline/`)
-3. **Train model** using collected data
-4. **Test** on new subjects
+### Missing Dependencies
+```bash
+pip install -r requirements.txt
+pip install brainflow
+```
 
-## Support
+### Signal Quality Issues
+- Check electrode impedance
+- Verify proper electrode placement
+- Ensure conductive gel application
+- Check wireless signal strength
 
-For issues:
-- Check this README
-- Verify all dependencies installed
-- Try mock mode first
-- Check terminal for error messages
+### Application Errors
+- Check terminal output for error messages
+- Verify all dependencies installed correctly
+- Ensure output directory has write permissions
 
-## Credits
+## Data Collection Protocol
 
-Created for Team 5 - VisionStudio
-Motor imagery BCI data collection for visionOS project
+Standard procedure for collecting data:
+
+1. **Preparation** (5 minutes)
+   - Position EEG cap on participant
+   - Verify signal quality across all channels
+   - Brief participant on motor imagery tasks
+   - Emphasize minimal physical movement
+
+2. **Practice Session** (optional, 2 minutes)
+   - Run single trial sequence without saving
+   - Confirm participant understands task requirements
+
+3. **Recording Session** (2 minutes)
+   - Enter participant identifier
+   - Start recording
+   - Monitor signal quality during session
+   - Avoid interruptions during active trials
+
+4. **Verification** (1 minute)
+   - Confirm successful file save
+   - Check file size and format
+   - Prepare for next participant
+
+Estimated time per participant: 8-10 minutes
+
+## Integration with ML Pipeline
+
+Collected data can be processed using the existing BCI ML pipeline:
+
+1. Load data using `pyxdf` or `mne` libraries
+2. Apply preprocessing pipeline (`bci_ml_pipeline/scripts/1_preprocess_data.py`)
+3. Train models using collected dataset
+4. Evaluate performance metrics
+
+## Technical Specifications
+
+- **Sampling Rate**: 250 Hz
+- **Channel Count**: 8 (Cyton board)
+- **Data Precision**: 24-bit ADC
+- **Communication**: 2.4 GHz wireless
+- **Latency**: <50ms for visualization updates
+- **File Size**: Approximately 2-3 MB per 2-minute session (XDF format)
+
+## Known Limitations
+
+- Requires physical OpenBCI hardware (no simulation mode)
+- XDF export requires pyxdf library
+- Windows COM port configuration may vary
+- Maximum session length limited by headset battery life
+
+## System Requirements
+
+- **OS**: Windows 10/11, macOS 10.14+, or Linux
+- **Python**: 3.8 or higher
+- **RAM**: Minimum 4 GB
+- **Storage**: 100 MB for application + space for data files
+- **Display**: Minimum 1280x720 resolution
