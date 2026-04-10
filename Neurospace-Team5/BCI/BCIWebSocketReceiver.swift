@@ -31,10 +31,20 @@ final class BCIWebSocketClient {
     var lastConfidence: Double = 0
     var logLines: [String] = []
 
+    /// Assign this before starting a session so intent messages drive the arm.
+    /// Set from AppModel or BubbleGameController when the session begins.
+    var armMapper: BCIArmMapper?
+
     private var socketTask: URLSessionWebSocketTask?
     private let session = URLSession(configuration: .default)
     private let decoder = JSONDecoder()
-    private let minimumConfidence = 0.75
+
+    // Aligned with the Python bridge CONFIDENCE_THRESHOLD (0.65).
+    // BCIArmMapper applies its own secondary check at 0.55.
+    private let minimumConfidence = 0.65
+
+    // Movement magnitude applied per intent (matches bci_test_data.json scale)
+    private let moveMagnitude: Float = 0.9
 
     func connect(host: String, port: Int = 8765) {
         disconnect()
@@ -140,26 +150,96 @@ final class BCIWebSocketClient {
         }
     }
 
+    // MARK: - Intent routing
+
     private func route(intent: String, confidence: Double) {
         lastIntent = intent
         lastConfidence = confidence
 
         guard confidence >= minimumConfidence else {
-            appendLog("Ignored \(intent) because confidence \(confidence) < \(minimumConfidence)")
+            appendLog("Ignored \(intent) — confidence \(String(format: "%.2f", confidence)) < \(minimumConfidence)")
+            sendControlMessage(.idle, confidence: confidence)
             return
         }
 
         switch intent {
-        case "focus_left":
-            appendLog("Action: highlight left target")
-        case "focus_right":
-            appendLog("Action: highlight right target")
-        case "confirm":
-            appendLog("Action: confirm selected target")
+
+        // ── EEGNet outputs (from Python bridge_server.py) ─────────────────
+        case "moveLeft":
+            appendLog("Action: move LEFT arm (\(String(format: "%.2f", confidence)))")
+            sendControlMessage(.moveLeft, confidence: confidence)
+
+        case "moveRight":
+            appendLog("Action: move RIGHT arm (\(String(format: "%.2f", confidence)))")
+            sendControlMessage(.moveRight, confidence: confidence)
+
+        case "moveUp":
+            appendLog("Action: move UP (\(String(format: "%.2f", confidence)))")
+            sendControlMessage(.moveUp, confidence: confidence)
+
+        case "moveDown":
+            appendLog("Action: move DOWN (\(String(format: "%.2f", confidence)))")
+            sendControlMessage(.moveDown, confidence: confidence)
+
+        case "moveForward":
+            appendLog("Action: move FORWARD (\(String(format: "%.2f", confidence)))")
+            sendControlMessage(.moveForward, confidence: confidence)
+
+        case "moveBackward":
+            appendLog("Action: move BACKWARD (\(String(format: "%.2f", confidence)))")
+            sendControlMessage(.moveBackward, confidence: confidence)
+
         case "idle":
-            appendLog("Action: no-op / idle")
+            appendLog("Action: idle — stopping motion")
+            sendControlMessage(.idle, confidence: confidence)
+
+        // ── Legacy mock intents (kept for debug/fallback) ─────────────────
+        case "focus_left":
+            appendLog("Action: focus_left (legacy) → moveLeft")
+            sendControlMessage(.moveLeft, confidence: confidence)
+
+        case "focus_right":
+            appendLog("Action: focus_right (legacy) → moveRight")
+            sendControlMessage(.moveRight, confidence: confidence)
+
+        case "confirm":
+            appendLog("Action: confirm (legacy) → idle")
+            sendControlMessage(.idle, confidence: confidence)
+
         default:
             appendLog("Unknown intent: \(intent)")
+        }
+    }
+
+    // MARK: - BCIArmMapper bridge
+
+    /// Translates a semantic intent into a BCIControlMessage and forwards it
+    /// to BCIArmMapper, which drives BubbleGameController.
+    private func sendControlMessage(_ intent: BCIIntent, confidence: Double) {
+        let (activeArm, x, y, z): (ActiveArm, Float, Float, Float) = {
+            switch intent {
+            case .moveLeft:     return (.left,  -moveMagnitude,  0, 0)
+            case .moveRight:    return (.right,  moveMagnitude,  0, 0)
+            case .moveUp:       return (.right,  0,  moveMagnitude, 0)
+            case .moveDown:     return (.right,  0, -moveMagnitude, 0)
+            case .moveForward:  return (.right,  0,  0, -moveMagnitude)
+            case .moveBackward: return (.right,  0,  0,  moveMagnitude)
+            case .idle, .pop:   return (.right,  0,  0,  0)
+            }
+        }()
+
+        let message = BCIControlMessage(
+            timestamp: Date().timeIntervalSince1970,
+            activeArm: activeArm,
+            moveX: x,
+            moveY: y,
+            moveZ: z,
+            confidence: Float(confidence)
+        )
+
+        // BCIArmMapper is @MainActor — dispatch to main thread
+        Task { @MainActor in
+            self.armMapper?.handleControlMessage(message)
         }
     }
 
