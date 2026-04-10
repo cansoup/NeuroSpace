@@ -4,13 +4,12 @@ Desktop application for collecting motor imagery EEG data using OpenBCI headset.
 
 ## Features
 
-- ✅ Real-time 8-channel EEG visualization
-- ✅ 4-class motor imagery tasks (left, right, down, up)
-- ✅ Randomized trial presentation
-- ✅ Visual cues with arrows and instructions
-- ✅ Event marker logging
-- ✅ Save data in XDF or GDF format
-- ✅ Mock mode for testing without hardware
+-  Real-time 8-channel EEG visualization
+-  4-class motor imagery tasks (left, right, down, up)
+-  Randomized trial presentation
+-  Visual cues with arrows and instructions
+-  Event marker logging
+-  Save data in XDF or GDF format
 
 ## Installation
 
