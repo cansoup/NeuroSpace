@@ -19,7 +19,7 @@ Desktop application for collecting motor imagery EEG data using OpenBCI headset.
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Install BrainFlow for Hardware Support
+### 2. Install BrainFlow for Hardware Support
 
 ```bash
 pip install brainflow
