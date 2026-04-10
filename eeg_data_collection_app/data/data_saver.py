@@ -11,7 +11,7 @@ import config
 
 def save_xdf(filename, eeg_data, eeg_timestamps, events):
     """
-    Save data in XDF format
+    Save data in XDF format using pylsl
 
     Args:
         filename (str): Output filename
@@ -20,63 +20,98 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
         events (list): List of (timestamp, marker, description) tuples
     """
     try:
-        from pyxdf import write_xdf
+        import xml.etree.ElementTree as ET
+        import struct
+        import gzip
 
-        # Prepare EEG stream
-        eeg_stream = {
-            'info': {
-                'name': ['OpenBCI_EEG'],
-                'type': ['EEG'],
-                'channel_count': [str(config.N_CHANNELS)],
-                'nominal_srate': [str(config.SAMPLING_RATE)],
-                'channel_format': ['float32'],
-                'source_id': ['openbci_cyton'],
-                'created_at': [str(eeg_timestamps[0])],
-                'desc': [{
-                    'channels': {
-                        'channel': [
-                            {'label': [f'Ch{i+1}'], 'type': ['EEG'], 'unit': ['microvolts']}
-                            for i in range(config.N_CHANNELS)
-                        ]
-                    }
-                }]
-            },
-            'time_series': eeg_data.T,  # XDF expects (n_samples, n_channels)
-            'time_stamps': eeg_timestamps
-        }
-
-        # Prepare marker stream
-        streams = [eeg_stream]
-
-        if len(events) > 0:
-            event_timestamps = np.array([e[0] for e in events])
-            event_markers = np.array([[str(e[1])] for e in events], dtype=object)  # String markers
-
-            marker_stream = {
-                'info': {
-                    'name': ['Markers'],
-                    'type': ['Markers'],
-                    'channel_count': ['1'],
-                    'nominal_srate': ['0'],
-                    'channel_format': ['string'],
-                    'source_id': ['task_markers'],
-                    'created_at': [str(event_timestamps[0])]
-                },
-                'time_series': event_markers,
-                'time_stamps': event_timestamps
-            }
-
-            streams.append(marker_stream)
-
-        # Save XDF file
         print(f"Saving XDF file: {filename}")
-        write_xdf(filename, streams)
-        print(f"  Saved successfully: {eeg_data.shape[1]} samples, {len(events)} events")
 
+        # Create XDF file structure
+        with gzip.open(filename, 'wb') as f:
+            # Write XDF header
+            f.write(b'XDF:')
+
+            # Write EEG stream header
+            eeg_header = f'''<?xml version="1.0"?>
+<info>
+  <name>OpenBCI_EEG</name>
+  <type>EEG</type>
+  <channel_count>{config.N_CHANNELS}</channel_count>
+  <nominal_srate>{config.SAMPLING_RATE}</nominal_srate>
+  <channel_format>float32</channel_format>
+  <source_id>openbci_cyton</source_id>
+  <desc>
+    <channels>'''
+
+            for i in range(config.N_CHANNELS):
+                eeg_header += f'''
+      <channel>
+        <label>Ch{i+1}</label>
+        <type>EEG</type>
+        <unit>microvolts</unit>
+      </channel>'''
+
+            eeg_header += '''
+    </channels>
+  </desc>
+</info>'''
+
+            # Write stream header chunk (chunk tag 2)
+            header_bytes = eeg_header.encode('utf-8')
+            f.write(struct.pack('<H', 2))  # Chunk tag
+            f.write(struct.pack('<I', len(header_bytes)))  # Length
+            f.write(header_bytes)
+
+            # Write EEG samples (chunk tag 3 for samples)
+            if eeg_data.shape[1] > 0:
+                for i in range(eeg_data.shape[1]):
+                    f.write(struct.pack('<H', 3))  # Sample chunk
+                    sample_size = config.N_CHANNELS * 4 + 8  # 4 bytes per float32 + 8 for timestamp
+                    f.write(struct.pack('<I', sample_size))
+                    f.write(struct.pack('<d', eeg_timestamps[i]))  # Timestamp
+                    for ch in range(config.N_CHANNELS):
+                        f.write(struct.pack('<f', eeg_data[ch, i]))  # Sample data
+
+            # Write marker stream if events exist
+            if len(events) > 0:
+                # Marker stream header
+                marker_header = '''<?xml version="1.0"?>
+<info>
+  <name>Markers</name>
+  <type>Markers</type>
+  <channel_count>1</channel_count>
+  <nominal_srate>0</nominal_srate>
+  <channel_format>string</channel_format>
+  <source_id>task_markers</source_id>
+</info>'''
+
+                header_bytes = marker_header.encode('utf-8')
+                f.write(struct.pack('<H', 2))  # Chunk tag
+                f.write(struct.pack('<I', len(header_bytes)))
+                f.write(header_bytes)
+
+                # Write marker samples
+                for timestamp, marker, desc in events:
+                    marker_str = str(marker)
+                    marker_bytes = marker_str.encode('utf-8')
+                    f.write(struct.pack('<H', 3))  # Sample chunk
+                    sample_size = len(marker_bytes) + 1 + 8  # String + null terminator + timestamp
+                    f.write(struct.pack('<I', sample_size))
+                    f.write(struct.pack('<d', timestamp))  # Timestamp
+                    f.write(marker_bytes)
+                    f.write(b'\0')  # Null terminator
+
+            # Write footer (chunk tag 6)
+            f.write(struct.pack('<H', 6))
+            f.write(struct.pack('<I', 0))
+
+        print(f"  Saved successfully: {eeg_data.shape[1]} samples, {len(events)} events")
         return True
 
     except Exception as e:
         print(f"Error saving XDF: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def save_gdf(filename, eeg_data, eeg_timestamps, events):
