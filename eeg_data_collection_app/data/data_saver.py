@@ -20,7 +20,7 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
         events (list): List of (timestamp, marker, description) tuples
     """
     try:
-        import pyxdf
+        from pyxdf import write_xdf
 
         # Prepare EEG stream
         eeg_stream = {
@@ -30,16 +30,27 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
                 'channel_count': [str(config.N_CHANNELS)],
                 'nominal_srate': [str(config.SAMPLING_RATE)],
                 'channel_format': ['float32'],
-                'source_id': ['openbci_cyton']
+                'source_id': ['openbci_cyton'],
+                'created_at': [str(eeg_timestamps[0])],
+                'desc': [{
+                    'channels': {
+                        'channel': [
+                            {'label': [f'Ch{i+1}'], 'type': ['EEG'], 'unit': ['microvolts']}
+                            for i in range(config.N_CHANNELS)
+                        ]
+                    }
+                }]
             },
             'time_series': eeg_data.T,  # XDF expects (n_samples, n_channels)
             'time_stamps': eeg_timestamps
         }
 
         # Prepare marker stream
+        streams = [eeg_stream]
+
         if len(events) > 0:
             event_timestamps = np.array([e[0] for e in events])
-            event_markers = np.array([[e[1]] for e in events])  # Reshape to (n_events, 1)
+            event_markers = np.array([[str(e[1])] for e in events], dtype=object)  # String markers
 
             marker_stream = {
                 'info': {
@@ -47,34 +58,20 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
                     'type': ['Markers'],
                     'channel_count': ['1'],
                     'nominal_srate': ['0'],
-                    'channel_format': ['int32'],
-                    'source_id': ['task_markers']
+                    'channel_format': ['string'],
+                    'source_id': ['task_markers'],
+                    'created_at': [str(event_timestamps[0])]
                 },
                 'time_series': event_markers,
                 'time_stamps': event_timestamps
             }
 
-            streams = [eeg_stream, marker_stream]
-        else:
-            streams = [eeg_stream]
+            streams.append(marker_stream)
 
         # Save XDF file
-        # Note: pyxdf.save_xdf doesn't exist, we need to use write_xdf or similar
-        # For now, we'll use a workaround with pyxdf stream format
-
         print(f"Saving XDF file: {filename}")
-        # XDF saving requires specific library - this is a placeholder
-        # In practice, you'd use python-xdf or similar
-        print(f"  EEG shape: {eeg_data.shape}")
-        print(f"  Events: {len(events)}")
-        print("  XDF format support requires additional setup")
-        print("  Saving as NPZ instead for now...")
-
-        # Temporary: Save as NPZ until XDF writer is properly configured
-        np.savez(filename.replace('.xdf', '_backup.npz'),
-                eeg_data=eeg_data,
-                eeg_timestamps=eeg_timestamps,
-                events=events)
+        write_xdf(filename, streams)
+        print(f"  Saved successfully: {eeg_data.shape[1]} samples, {len(events)} events")
 
         return True
 
