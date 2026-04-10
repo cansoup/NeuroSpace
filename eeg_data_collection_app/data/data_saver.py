@@ -26,6 +26,21 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
 
         print(f"Saving XDF file: {filename}")
 
+        # Validate and normalize data shape
+        if len(eeg_data.shape) == 1:
+            # Empty or 1D array - reshape to (n_channels, 0)
+            eeg_data = eeg_data.reshape(config.N_CHANNELS, 0)
+            eeg_timestamps = np.array([])
+        elif eeg_data.shape[0] != config.N_CHANNELS:
+            # Wrong shape - reshape if possible
+            if eeg_data.size == 0:
+                eeg_data = eeg_data.reshape(config.N_CHANNELS, 0)
+                eeg_timestamps = np.array([])
+            else:
+                raise ValueError(f"Expected {config.N_CHANNELS} channels, got {eeg_data.shape[0]}")
+
+        n_samples = eeg_data.shape[1]
+
         # Create XDF file structure
         with gzip.open(filename, 'wb') as f:
             # Write XDF header
@@ -63,8 +78,8 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
             f.write(header_bytes)
 
             # Write EEG samples (chunk tag 3 for samples)
-            if eeg_data.shape[1] > 0:
-                for i in range(eeg_data.shape[1]):
+            if n_samples > 0:
+                for i in range(n_samples):
                     f.write(struct.pack('<H', 3))  # Sample chunk
                     sample_size = config.N_CHANNELS * 4 + 8  # 4 bytes per float32 + 8 for timestamp
                     f.write(struct.pack('<I', sample_size))
@@ -105,7 +120,7 @@ def save_xdf(filename, eeg_data, eeg_timestamps, events):
             f.write(struct.pack('<H', 6))
             f.write(struct.pack('<I', 0))
 
-        print(f"  Saved successfully: {eeg_data.shape[1]} samples, {len(events)} events")
+        print(f"  Saved successfully: {n_samples} samples, {len(events)} events")
         return True
 
     except Exception as e:
