@@ -207,24 +207,4 @@ eeg_data_collection_app/
 └── README.md
 ```
 
-## Next Steps
 
-After collecting data:
-
-1. **Load data** using your existing `pyxdf` or `mne` tools
-2. **Preprocess** using your pipeline (`bci_ml_pipeline/`)
-3. **Train model** using collected data
-4. **Test** on new subjects
-
-## Support
-
-For issues:
-- Check this README
-- Verify all dependencies installed
-- Try mock mode first
-- Check terminal for error messages
-
-## Credits
-
-Created for Team 5 - VisionStudio
-Motor imagery BCI data collection for visionOS project
