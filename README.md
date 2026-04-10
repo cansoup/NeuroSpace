@@ -1,220 +1,202 @@
-# Neurospace — BCI Bubble Pop
+# BCI ML Pipeline
 
-A visionOS game designed for upper-limb amputees, enabling gameplay through Brain-Computer Interface (BCI) signals decoded from EEG data. Players control a virtual arm pointer using their motor imagery to navigate and pop 3D bubbles in mixed-reality space.
-
----
+Machine learning pipeline for classifying motor imagery from EEG signals using the BCI Competition IIIa dataset.
 
 ## Overview
 
-Neurospace translates EEG-based BCI signals into spatial movement, allowing users without full limb function to interact with a 3D AR environment on Apple Vision Pro. The game provides an engaging rehabilitation and training context where players move a pointer through thought-driven intent to pop bubbles rendered in their physical space.
+This pipeline implements an EEGNet model to classify EEG signals into 4 motor imagery classes:
+- **Left** - Left hand motor imagery
+- **Right** - Right hand motor imagery  
+- **Down** - Foot motor imagery
+- **Up** - Tongue motor imagery
 
----
+## Model Performance
 
-## Features
+- **Architecture**: EEGNet (3,028 parameters)
+- **Dataset**: BCI Competition IIIa (subject k3b)
+- **Validation Accuracy**: 88.89%
+- **Training samples**: 144 epochs
+- **Validation samples**: 36 epochs
+- **Training epochs**: 76
 
-- **BCI-driven control** — Arm pointer movement is driven by decoded EEG intent signals (left, right, up, down, forward, backward) received via WebSocket from a backend BCI pipeline
-- **Mixed-reality immersive space** — Bubbles and arm entities are rendered as 3D RealityKit objects overlaid on the real world (passthrough AR)
-- **Dual arm support** — Left and right arm models are both rendered; the active arm (used for gameplay) can be toggled
-- **Auto-pop collision** — When the active arm tip comes within range of a bubble, the bubble pops and score increases
-- **Randomized bubble placement** — Each session spawns bubbles at random non-overlapping positions to keep gameplay varied
-- **2-minute countdown timer** — Each session runs for 120 seconds; the timer counts down in real time and turns red in the final 30 seconds
-- **Session end conditions** — Session ends when all bubbles are popped or the timer reaches zero
-- **Compact in-session HUD** — A minimal floating control panel shows EEG connection status, remaining time, and current score; includes a stop button with an end-session confirmation prompt
-- **Lobby with debug controls** — Pre-session screen shows connection and session status, active arm selector, manual intent debug buttons, and the Start Session button
-
----
-
-## Architecture
+## Project Structure
 
 ```
-Neurospace-Team5/
-├── App/
-│   ├── Neurospace_Team5App.swift   # App entry point, WindowGroup + ImmersiveSpace setup
-│   └── AppModel.swift              # Shared observable state (immersive space state, game controller)
-├── BCI/
-│   ├── BCIService.swift            # BCI signal processing service
-│   ├── IntentManager.swift         # Maps decoded signals to BCIIntent
-│   └── WebSocketManager.swift      # WebSocket connection to EEG backend
-├── BubbleGame/
-│   ├── BubbleManager.swift         # Bubble lifecycle management
-│   ├── CollisionManager.swift      # Collision detection logic
-│   └── ScoreManager.swift          # Score tracking
-├── Controllers/
-│   └── BubbleGameController.swift  # Central game controller (state, timer, movement, collision)
-├── Immersive/
-│   └── ImmersiveView.swift         # RealityKit scene: arm entities, bubbles, head anchor
-├── Models/
-│   ├── ArmState.swift              # Arm position, velocity, and pop state
-│   ├── BCIIntent.swift             # Enum of possible BCI intents
-│   ├── Bubble.swift                # Bubble model (position, popped state)
-│   ├── ConnectionState.swift       # EEG connection state enum
-│   ├── EEGCommandMessage.swift     # WebSocket message model
-│   └── SessionState.swift          # Game session state enum
-└── UI/
-    ├── ContentView.swift           # Root view, lobby screen with debug controls
-    └── GameView.swift              # In-session compact HUD (timer, score, stop button)
+bci-ml-pipeline/
+├── models/
+│   ├── architectures/
+│   │   └── eegnet.py              # EEGNet PyTorch implementation
+│   └── saved_models/
+│       └── k3b_best.pth           # Trained model checkpoint
+├── scripts/
+│   ├── 1_preprocess_data.py       # Data preprocessing pipeline
+│   ├── 2_train_baseline.py        # Model training script
+│   ├── 3_evaluate_model.py        # Evaluation script
+│   ├── classify_eeg.py            # Batch classification script
+│   ├── online_classification.py   # Real-time WebSocket server
+│   ├── bridge_server.py           # Production server with session management
+│   └── README_INFERENCE.md        # Server documentation
+├── notebooks/
+│   ├── 00_preprocess_data.ipynb   # Data preprocessing
+│   ├── 01_data_exploration.ipynb  # Exploratory data analysis
+│   ├── 02_train_model.ipynb       # Model training
+│   ├── 03_evaluate_results.ipynb  # Model evaluation with AUC-ROC
+│   └── 04_model_inference.ipynb   # Inference examples
+├── configs/
+│   └── config.yaml                # Configuration file
+├── data/
+│   ├── raw/                       # Raw GDF files (not included)
+│   └── processed/                 # Preprocessed data (not included)
+├── results/
+│   └── k3b/
+│       └── training_history.npz   # Training metrics
+└── requirements.txt
 ```
 
----
+## Installation
 
-## How It Works
+```bash
+pip install -r requirements.txt
+```
 
-1. **Lobby** — The user sees connection status, session info, and debug controls. They can manually trigger intents for testing or select the active arm.
-2. **Start Session** — Tapping "Start Session" opens the mixed-reality immersive space and begins the 2-minute countdown. The lobby window is dismissed.
-3. **Gameplay** — 3D bubbles appear in front of the user anchored relative to head position. BCI signals move the arm pointer. When the pointer tip touches a bubble, it pops and adds 100 points.
-4. **In-session HUD** — A compact panel floats in the upper-right of the immersive view, showing EEG status, countdown timer, and score.
-5. **Session End** — When all bubbles are popped or time runs out, the session ends. The user can also stop early via the X button → confirmation prompt.
+## Dataset
 
----
+The model was trained on the BCI Competition IIIa dataset:
+- 3 subjects (k3b, k6b, l1b)
+- 60 EEG channels
+- 250 Hz sampling rate
+- 4 motor imagery classes per subject
 
-## Rehabilitation Stage Design
+Download from: https://www.bbci.de/competition/iii/
 
-Neurospace structures gameplay into five progressive stages grounded in motor imagery rehabilitation for upper-limb amputees. The core mechanism is **Motor Imagery (MI)**: repeatedly imagining a limb movement preserves cortical representation, improves EEG signal quality, and builds the neural foundation for future BCI-controlled prosthetic use.
+Place GDF files in `data/raw/` to retrain or test.
 
-### Design Principles
+## Usage
 
-- **Simple → Complex**: single axis → 2D plane → full 3D
-- **Unilateral → Bilateral**: one active arm → hemispheric switching
-- **Static → Dynamic**: fixed targets → moving, time-limited targets
-- **Scaffolded progression**: each stage unlocks only when performance criteria are met
+### Batch Classification
 
----
+Process GDF files and output predictions:
 
-### Stage 1 — Signal Discovery
+```bash
+python scripts/classify_eeg.py \
+    --input data/raw/k3b.gdf \
+    --model models/saved_models/k3b_best.pth \
+    --output predictions.csv
+```
 
-| Parameter | Value |
-|---|---|
-| Axes | X only (left / right) |
-| Bubbles | 3 × large (radius 0.12 m) |
-| Arm mode | Single active |
-| Duration | 3 min |
-| Unlock | ≥ 70% accuracy & all 3 popped |
+Output CSV contains:
+- Epoch index and timestamp
+- Predicted class and label
+- Confidence score
+- Probability distribution across all classes
 
-Large targets and restricted movement minimise frustration during the first BCI interaction. The patient discovers which mental strategy (pushing, rotating, squeezing imagery) produces the strongest and most consistent EEG signal.
+### Real-time Classification Server
 
-**Clinical rationale:** Establishes the patient's individual signal profile. Success on the first contact builds neurological confidence and lays the foundation for cortical map preservation.
+Run a WebSocket server for real-time classification:
 
----
+```bash
+python scripts/bridge_server.py \
+    --model models/saved_models/k3b_best.pth \
+    --ws-port 8765
+```
 
-### Stage 2 — Spatial Mapping
+The server accepts EEG data via WebSocket and returns classification results.
 
-| Parameter | Value |
-|---|---|
-| Axes | X + Y (left / right + up / down) |
-| Bubbles | 6 × medium (radius 0.09 m) |
-| Arm mode | Single active |
-| Duration | 2 min 30 s |
-| Unlock | ≥ 70% accuracy & all 6 popped |
+See `scripts/README_INFERENCE.md` for protocol details.
 
-Bubbles are arranged in a grid-like pattern in the frontal plane, providing clear spatial scaffolding. The vertical axis engages a distinct cortical region from the horizontal axis, broadening the motor imagery vocabulary.
+### Training
 
-**Clinical rationale:** Expanding to 2-D builds a richer set of decodable EEG patterns, directly increasing the degrees of freedom available for future prosthetic control.
+Train a new model on the dataset:
 
----
+```bash
+# 1. Preprocess raw data
+python scripts/1_preprocess_data.py
 
-### Stage 3 — Depth Perception
+# 2. Train model
+python scripts/2_train_baseline.py
 
-| Parameter | Value |
-|---|---|
-| Axes | X + Y + Z (full 3-D) |
-| Bubbles | 8 × standard (radius 0.06 m) |
-| Arm mode | Single active |
-| Duration | 2 min |
-| Unlock | ≥ 75% accuracy & ≥ 6 popped |
+# 3. Evaluate model
+python scripts/3_evaluate_model.py
+```
 
-Bubbles are placed at varying depths, requiring combined intent (e.g. right + forward simultaneously). This mirrors the spatial complexity of real reach-and-grasp scenarios used in ADL (activities of daily living).
+Alternatively, use the Jupyter notebooks for an interactive workflow.
 
-**Clinical rationale:** Full 3-D spatial navigation demands predictive motor planning — a higher cognitive-motor integration skill that directly predicts prosthetic usability in daily life.
+## Configuration
 
----
+Edit `configs/config.yaml` to modify:
+- **Preprocessing**: Filter frequencies, epoch windows, baseline correction
+- **Model architecture**: Dropout rate, kernel sizes, number of filters
+- **Training**: Learning rate, batch size, number of epochs
 
-### Stage 4 — Bilateral Coordination
+## Preprocessing Pipeline
 
-| Parameter | Value |
-|---|---|
-| Axes | Full 3-D |
-| Bubbles | 10 (5 cyan = left arm, 5 orange = right arm) |
-| Arm mode | Bilateral (colour-coded assignment) |
-| Duration | 2 min |
-| Unlock | ≥ 80% accuracy & ≥ 8 popped |
+1. **Bandpass filter** (8-30 Hz) - Isolates motor imagery frequency range
+2. **Notch filter** (50 Hz) - Removes powerline noise
+3. **Epoch extraction** (-0.5 to 3.5 seconds around cue)
+4. **Baseline correction** (using -0.5 to 0 seconds)
+5. **Scaling** to microvolts
 
-Each bubble is colour-coded to a specific arm. The player must switch the active arm by BCI intent to match the target. Popping with the wrong arm yields no score.
+## Model Architecture
 
-**Clinical rationale:** Most ADL require bimanual coordination. Rapidly alternating between left and right motor imagery trains interhemispheric inhibition circuits — the neural basis of two-handed prosthetic use.
+EEGNet is a compact convolutional neural network designed for EEG classification:
 
----
+1. **Temporal convolution** - Learns frequency filters across time
+2. **Depthwise spatial convolution** - Learns spatial filters per frequency
+3. **Separable convolution** - Efficient feature extraction
+4. **Classification head** - Dense layer with softmax output
 
-### Stage 5 — Dynamic Flow
+Total parameters: 3,028 (compact and efficient)
 
-| Parameter | Value |
-|---|---|
-| Axes | Full 3-D |
-| Bubbles | Continuous respawn batches (radius 0.06 m) |
-| Arm mode | Bilateral |
-| Duration | 2 min |
-| Bubble lifetime | 12 s (expires without scoring) |
-| Speed | 0.02 – 0.05 m/s (random drift) |
+## WebSocket Protocol
 
-Bubbles drift slowly and disappear if not popped in time. The session ends only when the timer reaches zero, with continuous respawning. This stage exercises **predictive motor planning** — moving targets cannot be handled by purely reactive control.
+### Client → Server
 
-**Clinical rationale:** Real-world motor tasks are never static. This stage is the closest simulation of functional prosthetic use: dynamic targets, time pressure, bilateral arm switching, and full 3-D navigation — all simultaneously.
+```json
+{
+    "type": "eeg_data",
+    "timestamp": 1234567890.123,
+    "channels": 60,
+    "samples": [[ch0_vals], [ch1_vals], ...],
+    "sample_rate": 250
+}
+```
 
----
+### Server → Client
 
-### Progression Criteria Summary
+```json
+{
+    "type": "prediction",
+    "predicted_class": "left",
+    "predicted_index": 0,
+    "confidence": 0.8745,
+    "probabilities": {
+        "left": 0.8745,
+        "right": 0.0892,
+        "down": 0.0231,
+        "up": 0.0132
+    },
+    "processing_time_ms": 45.2
+}
+```
 
-| Stage | Unlock condition |
-|---|---|
-| 1 → 2 | ≥ 70% accuracy · all 3 bubbles popped |
-| 2 → 3 | ≥ 70% accuracy · all 6 bubbles popped |
-| 3 → 4 | ≥ 75% accuracy · ≥ 6 bubbles popped |
-| 4 → 5 | ≥ 80% accuracy · ≥ 8 bubbles popped |
-| 5 | Final stage — session ends by timer |
+## Results
 
-### Additional Clinical Considerations
+Per-class validation accuracy (k3b subject):
+- Balanced performance across all 4 classes
+- Macro-averaged accuracy: 88.89%
+- AUC-ROC scores available in evaluation notebook
 
-- **Mental fatigue**: BCI motor imagery causes significant cognitive load; signal quality degrades after 10–15 min. Rest screens between stages are recommended.
-- **Phantom limb pain relief**: The combination of motor imagery and real-time visual feedback activates mirror neuron circuits, which may reduce phantom limb pain — a documented side-benefit of AR-based MI training.
-- **Therapist monitoring**: Per-stage accuracy, response latency, and session scores should be logged and surfaced in a clinician dashboard for progress tracking.
+Training history stored in `results/k3b/training_history.npz`.
 
----
+## Files
 
-## BCI Intent Mapping
+- **Trained model**: `models/saved_models/k3b_best.pth`
+- **Model architecture**: `models/architectures/eegnet.py`
+- **Configuration**: `configs/config.yaml`
+- **Training results**: `results/k3b/training_history.npz`
 
-| Intent | Movement |
-|---|---|
-| `moveLeft` | Pointer moves left |
-| `moveRight` | Pointer moves right |
-| `moveUp` | Pointer moves up |
-| `moveDown` | Pointer moves down |
-| `moveForward` | Pointer moves forward (toward scene) |
-| `moveBackward` | Pointer moves backward |
-| `pop` | Triggers pop action |
-| `idle` | No movement |
+## Reference
 
----
+EEGNet architecture based on:
 
-## Requirements
-
-- Apple Vision Pro or visionOS Simulator
-- Xcode 16+
-- visionOS 2.0+
-- EEG BCI backend (WebSocket server) for live signal input — debug mode available without hardware
-
----
-
-## Running in Simulator
-
-1. Open `Neurospace-Team5.xcodeproj` in Xcode
-2. Select the **visionOS Simulator** target
-3. Build and run (`Cmd+R`)
-4. Use the debug intent buttons in the lobby to simulate BCI signals
-5. Press **Start Session** to enter the immersive space and begin gameplay
-
-> **Note:** In the simulator, spatial input (gaze + pinch) replaces physical interaction. Use the simulator's input controls to interact with UI elements.
-
----
-
-## Team
-
-**Team 5 — VisionStudio**
+Lawhern, V. J., Solon, A. J., Waytowich, N. R., Gordon, S. M., Hung, C. P., & Lance, B. J. (2018). EEGNet: a compact convolutional neural network for EEG-based brain–computer interfaces. Journal of Neural Engineering, 15(5), 056013.
