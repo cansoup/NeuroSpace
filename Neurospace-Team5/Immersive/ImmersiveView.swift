@@ -140,7 +140,11 @@ struct ImmersiveView: View {
             else { return }
 
             let controller = appModel.gameController
+            // isReadyStage: controls StartOrb UI — only shown in .ready state
             let isReadyStage = controller.sessionState == .ready
+            // useIdleArm: controls arm pose — idle in .ready and .finished to avoid
+            // the arm pointing at the last-popped bubble during stage transitions
+            let useIdleArm = controller.sessionState == .ready || controller.sessionState == .finished
 
             let activeState = controller.activeArm == .left
                 ? controller.leftArmState
@@ -149,7 +153,7 @@ struct ImmersiveView: View {
             let zoneToShow: BubbleZone
             let variantToShow: PoseVariant
 
-            if isReadyStage {
+            if useIdleArm {
                 zoneToShow = .middleMiddle
                 variantToShow = .right
             } else {
@@ -173,7 +177,7 @@ struct ImmersiveView: View {
                 armsRoot,
                 activeState: activeState,
                 activeArm: controller.activeArm,
-                isReadyStage: isReadyStage
+                isReadyStage: useIdleArm
             )
 
             if isReadyStage {
@@ -523,27 +527,14 @@ struct ImmersiveView: View {
                 translation: SIMD3<Float>(0.0, -0.16, -0.16)
             )
         } else {
-            let armDelta = activeState.tipPosition - activeState.basePosition
-
-            var desired = SIMD3<Float>(0.0, -0.30, -0.30)
-            desired.x += max(-0.14, min(0.14, armDelta.x * 1.6))
-            desired.y += max(-0.12, min(0.14, armDelta.y * 1.4))
-            desired.z += max(-0.10, min(0.10, armDelta.z * 1.1))
-
-            let xSign: Float = activeArm == .left ? -1.0 : 1.0
-            let yaw = max(-0.22, min(0.22, armDelta.x * 1.4 * xSign))
-            let pitch = max(-0.16, min(0.16, -armDelta.y * 1.1))
-            let roll = max(-0.12, min(0.12, armDelta.x * 0.7 * xSign))
-
-            let orientation =
-                simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0)) *
-                simd_quatf(angle: pitch, axis: SIMD3<Float>(1, 0, 0)) *
-                simd_quatf(angle: roll, axis: SIMD3<Float>(0, 0, 1))
-
+            // Fix armsRoot at a constant position — arm direction is expressed
+            // entirely through USDZ pose selection (stableVisualZone).
+            // Delta-based translation caused the center to shift when tipPosition
+            // jumped (e.g. clicking a left-side bubble with the right arm).
             targetTransform = Transform(
                 scale: SIMD3<Float>(repeating: 1.0),
-                rotation: orientation,
-                translation: desired
+                rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
+                translation: SIMD3<Float>(0.0, -0.30, -0.30)
             )
         }
 
