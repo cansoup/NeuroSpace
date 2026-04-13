@@ -303,6 +303,14 @@ final class BubbleGameController {
             return
         }
 
+        // Move arm tip to bubble position so the visual pose updates to point at it
+        let bubblePos = bubbles[idx].position
+        currentArmState.tipPosition = SIMD3<Float>(
+            min(max(bubblePos.x, xLimit.lowerBound), xLimit.upperBound),
+            min(max(bubblePos.y, yLimit.lowerBound), yLimit.upperBound),
+            min(max(bubblePos.z, zLimit.lowerBound), zLimit.upperBound)
+        )
+
         registerBubblePop(at: idx)
         checkSessionFinished()
     }
@@ -491,6 +499,11 @@ final class BubbleGameController {
         // Keep them naturally separated
         let minDistance = config.bubbleRadius * 3.2
 
+        // Arm tip starting positions — bubbles must not spawn within autoPopIfTouching range
+        let rightTipStart = SIMD3<Float>(0.16, 0.02, 0.00)
+        let leftTipStart  = SIMD3<Float>(-0.16, 0.02, 0.00)
+        let safeRadius = max(config.bubbleRadius + 0.028, 0.06) + 0.10
+
         var positions: [SIMD3<Float>] = []
         var tries = 0
 
@@ -510,6 +523,12 @@ final class BubbleGameController {
                 abs(candidate.z) < 0.08
 
             if tooCloseToCenter {
+                continue
+            }
+
+            // Ensure bubble doesn't spawn within immediate pop range of arm starting position
+            if simd_distance(candidate, rightTipStart) < safeRadius ||
+               simd_distance(candidate, leftTipStart) < safeRadius {
                 continue
             }
 

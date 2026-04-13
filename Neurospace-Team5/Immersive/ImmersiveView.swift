@@ -176,8 +176,6 @@ struct ImmersiveView: View {
                 isReadyStage: isReadyStage
             )
 
-            popBubblesTouchedByHands(controller: controller)
-
             if isReadyStage {
                 removeAllBubbleEntities(from: root)
             } else {
@@ -557,26 +555,6 @@ struct ImmersiveView: View {
             duration: duration,
             timingFunction: .easeInOut
         )
-    }
-
-    private func popBubblesTouchedByHands(controller: BubbleGameController) {
-        guard controller.sessionState != .ready,
-              controller.sessionState != .finished else { return }
-
-        let leftTip = controller.leftArmState.tipPosition
-        let rightTip = controller.rightArmState.tipPosition
-
-        let bubbleRadius = controller.stageConfig.bubbleRadius
-        let touchRadius = max(0.045, bubbleRadius + 0.020)
-
-        for bubble in controller.bubbles where !bubble.isGone && !bubble.isPopped {
-            let leftTouch = simd_distance(leftTip, bubble.position) <= touchRadius
-            let rightTouch = simd_distance(rightTip, bubble.position) <= touchRadius
-
-            if leftTouch || rightTouch {
-                controller.popBubble(withID: bubble.id)
-            }
-        }
     }
 
     private func playAnimationIfAvailable(on entity: Entity) {
