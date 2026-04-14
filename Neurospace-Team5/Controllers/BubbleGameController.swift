@@ -19,6 +19,13 @@ final class BubbleGameController {
     var bubbles: [Bubble] = []
     var score: Int = 0
 
+    // Gaze-based targeting — set each frame by ImmersiveView
+    var targetedBubbleID: UUID? = nil
+
+    // Increments on every successful bubble pop — observed by ImmersiveView to
+    // trigger the arm "reach" animation as click feedback.
+    private(set) var popCount: Int = 0
+
     // Stage
     var currentStage: Int = 1
     var targetBubbleColor: String = "Pink"
@@ -117,6 +124,8 @@ final class BubbleGameController {
         targetDirection = .zero
         filteredDirection = .zero
         remainingSeconds = stageConfig.duration
+        targetedBubbleID = nil
+        popCount = 0
 
         leftArmState = ArmState(
             basePosition: [-0.22, -0.14, 0.08],
@@ -152,6 +161,7 @@ final class BubbleGameController {
         filteredDirection = .zero
         sessionState = .ready
         remainingSeconds = stageConfig.duration
+        targetedBubbleID = nil
 
         leftArmState = ArmState(
             basePosition: [-0.22, -0.14, 0.08],
@@ -285,12 +295,17 @@ final class BubbleGameController {
         currentArmState.tipPosition = newTip
 
         if sessionState == .playing {
-            autoPopIfTouching()
             updateBubbleLifecycle(deltaTime: deltaTime)
         }
     }
 
     // MARK: - Tap-to-pop
+
+    /// Pops the bubble currently targeted by the user's gaze (set by ImmersiveView).
+    func popTargetedBubble() {
+        guard sessionState == .playing, let id = targetedBubbleID else { return }
+        popBubble(withID: id)
+    }
 
     func popBubble(withID id: UUID) {
         guard sessionState == .playing else { return }
@@ -455,6 +470,7 @@ final class BubbleGameController {
         hitCount += 1
         attemptCount += 1
         accuracy = Double(hitCount) / Double(attemptCount)
+        popCount += 1
     }
 
     private func updateBubbleLifecycle(deltaTime: Float) {

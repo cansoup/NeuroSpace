@@ -43,20 +43,22 @@ struct CongratsView: View {
 
             Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
                 Task { @MainActor in
-                    dismissWindow(id: appModel.congratsWindowID)
-                    dismissWindow(id: appModel.missionFailedWindowID)
-
                     if appModel.gameController.canAdvanceStage {
                         appModel.gameController.advanceStage()
+                        print("[Congrats] advanced to stage \(appModel.gameController.currentStage)")
 
                         if appModel.immersiveSpaceState == .open {
                             appModel.gameController.startSession()
+                            dismissWindow(id: appModel.congratsWindowID)
+                            dismissWindow(id: appModel.missionFailedWindowID)
                         } else {
                             appModel.immersiveSpaceState = .inTransition
                             switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                             case .opened:
                                 appModel.immersiveSpaceState = .open
                                 appModel.gameController.startSession()
+                                dismissWindow(id: appModel.congratsWindowID)
+                                dismissWindow(id: appModel.missionFailedWindowID)
 
                             case .userCancelled, .error:
                                 fallthrough
@@ -75,6 +77,8 @@ struct CongratsView: View {
                         }
 
                         openWindow(id: appModel.mainWindowID)
+                        dismissWindow(id: appModel.congratsWindowID)
+                        dismissWindow(id: appModel.missionFailedWindowID)
                     }
                 }
             }
@@ -88,13 +92,6 @@ struct CongratsView: View {
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
             dismissWindow(id: appModel.congratsWindowID)
-        }
-
-        // Also make sure this window disappears if the game is no longer in finished state
-        .onChange(of: appModel.gameController.sessionState) { _, newState in
-            if newState != .finished {
-                dismissWindow(id: appModel.congratsWindowID)
-            }
         }
     }
 }
