@@ -19,6 +19,13 @@ final class BubbleGameController {
     var bubbles: [Bubble] = []
     var score: Int = 0
 
+    // Gaze-based targeting — set each frame by ImmersiveView
+    var targetedBubbleID: UUID? = nil
+
+    // Increments on every successful bubble pop — observed by ImmersiveView to
+    // trigger the arm "reach" animation as click feedback.
+    private(set) var popCount: Int = 0
+
     // Stage
     var currentStage: Int = 1
     var targetBubbleColor: String = "Pink"
@@ -117,6 +124,8 @@ final class BubbleGameController {
         targetDirection = .zero
         filteredDirection = .zero
         remainingSeconds = stageConfig.duration
+        targetedBubbleID = nil
+        popCount = 0
 
         leftArmState = ArmState(
             basePosition: [-0.22, -0.14, 0.08],
@@ -152,6 +161,7 @@ final class BubbleGameController {
         filteredDirection = .zero
         sessionState = .ready
         remainingSeconds = stageConfig.duration
+        targetedBubbleID = nil
 
         leftArmState = ArmState(
             basePosition: [-0.22, -0.14, 0.08],
@@ -285,12 +295,17 @@ final class BubbleGameController {
         currentArmState.tipPosition = newTip
 
         if sessionState == .playing {
-            autoPopIfTouching()
             updateBubbleLifecycle(deltaTime: deltaTime)
         }
     }
 
     // MARK: - Tap-to-pop
+
+    /// Pops the bubble currently targeted by the user's gaze (set by ImmersiveView).
+    func popTargetedBubble() {
+        guard sessionState == .playing, let id = targetedBubbleID else { return }
+        popBubble(withID: id)
+    }
 
     func popBubble(withID id: UUID) {
         guard sessionState == .playing else { return }
@@ -302,6 +317,14 @@ final class BubbleGameController {
            assigned != activeArm {
             return
         }
+
+        // Move arm tip to bubble position so the visual pose updates to point at it
+        let bubblePos = bubbles[idx].position
+        currentArmState.tipPosition = SIMD3<Float>(
+            min(max(bubblePos.x, xLimit.lowerBound), xLimit.upperBound),
+            min(max(bubblePos.y, yLimit.lowerBound), yLimit.upperBound),
+            min(max(bubblePos.z, zLimit.lowerBound), zLimit.upperBound)
+        )
 
         registerBubblePop(at: idx)
         checkSessionFinished()
@@ -447,6 +470,7 @@ final class BubbleGameController {
         hitCount += 1
         attemptCount += 1
         accuracy = Double(hitCount) / Double(attemptCount)
+        popCount += 1
     }
 
     private func updateBubbleLifecycle(deltaTime: Float) {
@@ -491,6 +515,11 @@ final class BubbleGameController {
         // Keep them naturally separated
         let minDistance = config.bubbleRadius * 3.2
 
+        // Arm tip starting positions — bubbles must not spawn within autoPopIfTouching range
+        let rightTipStart = SIMD3<Float>(0.16, 0.02, 0.00)
+        let leftTipStart  = SIMD3<Float>(-0.16, 0.02, 0.00)
+        let safeRadius = max(config.bubbleRadius + 0.028, 0.06) + 0.10
+
         var positions: [SIMD3<Float>] = []
         var tries = 0
 
@@ -510,6 +539,12 @@ final class BubbleGameController {
                 abs(candidate.z) < 0.08
 
             if tooCloseToCenter {
+                continue
+            }
+
+            // Ensure bubble doesn't spawn within immediate pop range of arm starting position
+            if simd_distance(candidate, rightTipStart) < safeRadius ||
+               simd_distance(candidate, leftTipStart) < safeRadius {
                 continue
             }
 
