@@ -16,5 +16,8 @@ pyxdf>=1.16.0
 # Hardware interface (optional - will run in mock mode if not available)
 brainflow>=5.0.0
 
+# Serial port scanning for OpenBCI detection
+pyserial>=3.5
+
 # Optional: Lab Streaming Layer support
 # pylsl>=1.16.0

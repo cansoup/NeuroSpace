@@ -17,8 +17,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 from gui.eeg_plotter import EEGPlotter
 from gui.cue_display import CueDisplay
-from data.headset_interface import HeadsetInterface
+from data.headset_interface import HeadsetInterface, scan_com_ports
 from data.event_logger import EventLogger
+from brainflow.board_shim import BoardIds
 
 class MainWindow(QMainWindow):
     """Main application window"""
@@ -73,6 +74,30 @@ class MainWindow(QMainWindow):
         self.connection_label.setStyleSheet("color: red;")
         layout.addWidget(QLabel("Status:"))
         layout.addWidget(self.connection_label)
+
+        layout.addSpacing(10)
+
+        # COM Port selector
+        layout.addWidget(QLabel("COM Port:"))
+        self.com_port_combo = QComboBox()
+        self.com_port_combo.setMinimumWidth(150)
+        self.refresh_com_ports()
+        layout.addWidget(self.com_port_combo)
+
+        # Refresh ports button
+        refresh_btn = QPushButton("Refresh Ports")
+        refresh_btn.clicked.connect(self.refresh_com_ports)
+        refresh_btn.setMaximumWidth(100)
+        layout.addWidget(refresh_btn)
+
+        layout.addSpacing(10)
+
+        # Test mode: uses BrainFlow synthetic board, ignores COM port.
+        self.test_mode_check = QCheckBox("Test mode (no dongle)")
+        self.test_mode_check.setToolTip(
+            "Use BrainFlow's synthetic board to exercise the app without hardware."
+        )
+        layout.addWidget(self.test_mode_check)
 
         # Connect button
         self.connect_btn = QPushButton("Connect Headset")
@@ -167,36 +192,65 @@ class MainWindow(QMainWindow):
         panel.setLayout(layout)
         return panel
 
+    def refresh_com_ports(self):
+        """Refresh the list of available COM ports"""
+        self.com_port_combo.clear()
+
+        ports = scan_com_ports()
+
+        if ports:
+            for port_name, port_desc in ports:
+                self.com_port_combo.addItem(port_desc, port_name)
+        else:
+            self.com_port_combo.addItem("No ports found", None)
+
     def toggle_connection(self):
         """Toggle headset connection"""
         if not self.headset.is_connected():
-            # Try to connect
+            test_mode = self.test_mode_check.isChecked()
+            selected_port = self.com_port_combo.currentData()
+
+            if not test_mode and not selected_port:
+                QMessageBox.warning(self, "No Port Selected",
+                                   "No COM port selected or available.\n\n"
+                                   "Please:\n"
+                                   "1. Connect OpenBCI USB dongle\n"
+                                   "2. Click 'Refresh Ports'\n"
+                                   "3. Select the correct COM port\n"
+                                   "4. Click 'Connect Headset'\n\n"
+                                   "Or tick 'Test mode (no dongle)' to use the synthetic board.")
+                return
+
             try:
-                success = self.headset.connect()
+                if test_mode:
+                    success = self.headset.connect(board_id=BoardIds.SYNTHETIC_BOARD)
+                    status = "Connected (synthetic)"
+                else:
+                    success = self.headset.connect(serial_port=selected_port)
+                    status = f"Connected ({selected_port})"
+
                 if success:
-                    self.connection_label.setText("Connected")
+                    self.connection_label.setText(status)
                     self.connection_label.setStyleSheet("color: green; font-weight: bold;")
                     self.connect_btn.setText("Disconnect")
                     self.start_btn.setEnabled(True)
-                    # Start plotting
+                    self.com_port_combo.setEnabled(False)
+                    self.test_mode_check.setEnabled(False)
                     self.eeg_plotter.start_plotting(self.headset)
             except Exception as e:
-                QMessageBox.critical(self, "Connection Error",
-                                   f"Failed to connect to OpenBCI headset.\n\nError: {str(e)}\n\n"
-                                   "Make sure:\n"
-                                   "1. Headset is powered on\n"
-                                   "2. USB dongle is connected\n"
-                                   "3. BrainFlow is installed (pip install brainflow)")
+                QMessageBox.critical(self, "Connection Error", str(e))
                 self.connection_label.setText("Not Connected")
                 self.connection_label.setStyleSheet("color: red; font-weight: bold;")
         else:
-            # Disconnect
-            self.headset.disconnect()
+            # Stop the plotter first so its timer can't tick against a torn-down board.
             self.eeg_plotter.stop_plotting()
+            self.headset.disconnect()
             self.connection_label.setText("Not Connected")
             self.connection_label.setStyleSheet("color: red;")
             self.connect_btn.setText("Connect Headset")
             self.start_btn.setEnabled(False)
+            self.com_port_combo.setEnabled(True)
+            self.test_mode_check.setEnabled(True)
 
     def start_recording(self):
         """Start recording session"""

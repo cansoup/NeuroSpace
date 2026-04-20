@@ -61,23 +61,33 @@ class EEGPlotter(QWidget):
 
     def stop_plotting(self):
         """Stop real-time plotting"""
+        # Stop the timer before detaching headset so a pending tick can't fire
+        # against a torn-down board.
         self.timer.stop()
+        self.headset = None
 
     def update_plots(self):
         """Update plots with new data"""
         if self.headset is None:
             return
 
-        # Get latest data from headset
-        new_data = self.headset.get_current_data(num_samples=10)
+        # The board can be released between this check and the read
+        # (main thread vs. Qt timer). Guard against AttributeError / BrainFlow
+        # errors so the GUI doesn't crash on a mid-disconnect tick.
+        try:
+            new_data = self.headset.get_current_data(num_samples=10)
+        except (AttributeError, Exception):
+            return
 
-        if new_data is not None and new_data.shape[1] > 0:
-            # Shift buffer and add new data
-            self.data_buffer = np.roll(self.data_buffer, -new_data.shape[1], axis=1)
-            self.data_buffer[:, -new_data.shape[1]:] = new_data
+        if new_data is None or new_data.shape[1] == 0:
+            return
 
-            # Update each channel plot
-            time_axis = np.linspace(0, config.PLOT_DURATION, self.data_buffer.shape[1])
+        # Shift buffer and add new data
+        self.data_buffer = np.roll(self.data_buffer, -new_data.shape[1], axis=1)
+        self.data_buffer[:, -new_data.shape[1]:] = new_data
 
-            for i in range(config.N_CHANNELS):
-                self.curves[i].setData(time_axis, self.data_buffer[i, :])
+        # Update each channel plot
+        time_axis = np.linspace(0, config.PLOT_DURATION, self.data_buffer.shape[1])
+
+        for i in range(config.N_CHANNELS):
+            self.curves[i].setData(time_axis, self.data_buffer[i, :])
