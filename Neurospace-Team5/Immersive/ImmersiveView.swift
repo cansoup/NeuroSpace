@@ -164,7 +164,6 @@ struct ImmersiveView: View {
                 named: poseName(for: .middleMiddle, variant: .right)
             ) {
                 idlePose.isEnabled = true
-                playAnimationIfAvailable(on: idlePose)
             }
 
             if let progressBar = attachments.entity(for: "progressBar") {
@@ -294,6 +293,7 @@ struct ImmersiveView: View {
 
                     // Ready state: only StartOrb starts the session
                     if name == "StartOrb", appModel.gameController.sessionState == .ready {
+                        clickCount += 1
                         triggerSessionStart()
                         return
                     }
