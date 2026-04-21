@@ -125,6 +125,10 @@ struct ImmersiveView: View {
             content.add(worldAnchor)
             bubbleStore.worldAnchor = worldAnchor
 
+            let starField = makeStarField(count: 300, radius: 20.0)
+            starField.name = "StarField"
+            content.add(starField)
+
             let armsAnchor = AnchorEntity(.head, trackingMode: .continuous)
             armsAnchor.name = "ArmsAnchor"
             bubbleStore.armsAnchor = armsAnchor
@@ -841,6 +845,40 @@ struct ImmersiveView: View {
         entity.components.set(InputTargetComponent())
 
         return entity
+    }
+
+    private func makeStarField(count: Int, radius: Float) -> Entity {
+        let root = Entity()
+        for _ in 0..<count {
+            let theta = Float.random(in: 0...(2 * .pi))
+            let phi = acos(Float.random(in: -1...1))
+            let r = radius * Float.random(in: 0.85...1.0)
+
+            let x = r * sin(phi) * cos(theta)
+            let y = r * sin(phi) * sin(theta)
+            let z = r * cos(phi)
+
+            let size = Float.random(in: 0.01...0.04)
+            let brightness = Float.random(in: 0.5...1.0)
+
+            var material = UnlitMaterial()
+            let roll = Int.random(in: 0...100)
+            if roll < 5 {
+                material.color = .init(tint: UIColor(red: 0.7, green: 0.85, blue: 1.0, alpha: CGFloat(brightness)))
+            } else if roll < 8 {
+                material.color = .init(tint: UIColor(red: 1.0, green: 0.9, blue: 0.7, alpha: CGFloat(brightness)))
+            } else {
+                material.color = .init(tint: UIColor(white: CGFloat(brightness), alpha: 1.0))
+            }
+
+            let star = ModelEntity(
+                mesh: .generateSphere(radius: size),
+                materials: [material]
+            )
+            star.position = SIMD3<Float>(x, y, z)
+            root.addChild(star)
+        }
+        return root
     }
 
     private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
