@@ -207,7 +207,8 @@ struct ImmersiveView: View {
             updateArmPoseDisplay(
                 in: armsRoot,
                 zone: zoneToShow,
-                variant: variantToShow
+                variant: variantToShow,
+                animate: controller.sessionState == .playing
             )
 
             // Re-trigger arm animation on every tap while playing.
@@ -592,7 +593,8 @@ struct ImmersiveView: View {
     private func updateArmPoseDisplay(
         in armsRoot: Entity,
         zone: BubbleZone,
-        variant: PoseVariant
+        variant: PoseVariant,
+        animate: Bool = true
     ) {
         let targetName = poseName(for: zone, variant: variant)
         let currentlyVisibleName = armsRoot.children.first(where: { $0.isEnabled })?.name
@@ -601,9 +603,7 @@ struct ImmersiveView: View {
             child.isEnabled = child.name == targetName
         }
 
-        // Play (or restart looping) animation whenever the active pose changes.
-        // Also plays on first call when currentlyVisibleName is nil (fresh scene).
-        if currentlyVisibleName != targetName,
+        if animate, currentlyVisibleName != targetName,
            let pose = armsRoot.findEntity(named: targetName) {
             playAnimationIfAvailable(on: pose)
         }
