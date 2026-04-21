@@ -83,7 +83,7 @@ struct CongratsView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.purple)
+            .tint(DS.teal)
             .controlSize(.large)
         }
         .padding(40)
@@ -169,7 +169,7 @@ struct MissionFailedView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(DS.teal)
                 .controlSize(.large)
             }
         }
@@ -207,10 +207,10 @@ struct GameControlPanel: View {
 
     private var eegColor: Color {
         switch controller.connectionState {
-        case .connected:    return .green
-        case .connecting:   return .yellow
-        case .disconnected: return .orange
-        case .failed:       return .red
+        case .connected:    return DS.success
+        case .connecting:   return DS.warning
+        case .disconnected: return DS.gold
+        case .failed:       return DS.error
         }
     }
 
@@ -327,7 +327,7 @@ struct BubbleProgressBar: View {
                 HStack(spacing: 0) {
                     ForEach(0..<controller.totalBubbleCount, id: \.self) { i in
                         Capsule()
-                            .fill(i < controller.poppedCount ? Color.purple : Color.white.opacity(0.25))
+                            .fill(i < controller.poppedCount ? DS.teal : Color.white.opacity(0.25))
                             .frame(height: 8)
                             .animation(.easeInOut(duration: 0.25), value: controller.poppedCount)
                         if i < controller.totalBubbleCount - 1 {

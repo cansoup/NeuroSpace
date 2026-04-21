@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let accentTeal = Color(red: 0.18, green: 0.83, blue: 0.66)
+private let accentTeal = DS.teal
 
 struct ContentView: View {
     @Environment(AppModel.self) private var appModel
@@ -117,11 +117,7 @@ struct LobbyView: View {
             Spacer(minLength: 8)
         }
         .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(accentTeal.opacity(0.2), lineWidth: 1)
-        )
+        .tealGlassCard()
     }
 
     // MARK: - Center Column: Menu
@@ -176,18 +172,10 @@ struct LobbyView: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(accentTeal.opacity(0.15), lineWidth: 1)
-            )
+            .glassCard(radius: DS.radiusMd, border: DS.teal.opacity(0.15))
         }
         .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(accentTeal.opacity(0.2), lineWidth: 1)
-        )
+        .tealGlassCard()
     }
 
     private func menuButton(
@@ -247,11 +235,7 @@ struct LobbyView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(accentTeal.opacity(0.2), lineWidth: 1)
-        )
+        .tealGlassCard()
     }
 
     private func goalRow(label: String, value: String, unit: String) -> some View {
@@ -298,11 +282,7 @@ struct LobbyView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(accentTeal.opacity(0.2), lineWidth: 1)
-        )
+        .tealGlassCard()
     }
 
     // MARK: - Debug Panel
@@ -377,11 +357,7 @@ struct LobbyView: View {
             }
             .padding(18)
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(accentTeal.opacity(0.2), lineWidth: 1)
-        )
+        .tealGlassCard()
     }
 
     private var debugHeader: some View {

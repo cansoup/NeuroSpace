@@ -38,10 +38,10 @@ enum BubbleType: String, CaseIterable, Codable {
 
     var uiColor: UIColor {
         switch self {
-        case .red:   return .systemRed
-        case .blue:  return .systemBlue
-        case .green: return .systemGreen
-        case .gold:  return .systemYellow
+        case .red:   return UIColor(red: 1.0, green: 0.42, blue: 0.42, alpha: 1.0)
+        case .blue:  return UIColor(red: 0.36, green: 0.61, blue: 1.0, alpha: 1.0)
+        case .green: return UIColor(red: 0.30, green: 0.79, blue: 0.54, alpha: 1.0)
+        case .gold:  return UIColor(red: 1.0, green: 0.82, blue: 0.40, alpha: 1.0)
         }
     }
 
