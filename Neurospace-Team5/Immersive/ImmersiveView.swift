@@ -718,46 +718,6 @@ struct ImmersiveView: View {
             plane.isEnabled = playingNow
         }
 
-        guard playingNow,
-              bubbleStore.worldTracking.state == .running,
-              let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
-                atTimestamp: CACurrentMediaTime()
-              )
-        else {
-            hideAllPointLabels()
-            return
-        }
-
-        let headFromWorld = simd_inverse(deviceAnchor.originFromAnchorTransform)
-        let hoverConeRadians: Float = 8.0 * .pi / 180.0
-        var closestAngle: Float = .greatestFiniteMagnitude
-        var gazedID: UUID? = nil
-
-        for bubble in appModel.gameController.bubbles where !bubble.isGone {
-            let bubbleWorld = bubble.position + worldAnchorOffset
-            let bw4 = SIMD4<Float>(bubbleWorld.x, bubbleWorld.y, bubbleWorld.z, 1)
-            let hl4 = headFromWorld * bw4
-            let p = SIMD3<Float>(hl4.x, hl4.y, hl4.z)
-            guard p.z < 0 else { continue }
-
-            let lateral = (p.x * p.x + p.y * p.y).squareRoot()
-            let angle = atan2(lateral, abs(p.z))
-            if angle < closestAngle && angle <= hoverConeRadians {
-                closestAngle = angle
-                gazedID = bubble.id
-            }
-        }
-
-        for (id, entity) in bubbleStore.entities {
-            let label = entity.findEntity(named: "PointLabel")
-            label?.isEnabled = (id == gazedID)
-        }
-    }
-
-    private func hideAllPointLabels() {
-        for (_, entity) in bubbleStore.entities {
-            entity.findEntity(named: "PointLabel")?.isEnabled = false
-        }
     }
  
     @MainActor
@@ -781,25 +741,6 @@ struct ImmersiveView: View {
         entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
         entity.components.set(InputTargetComponent())
         entity.components.set(HoverEffectComponent())
-
-        let labelText = "+\(bubble.type.points)"
-        let textMesh = MeshResource.generateText(
-            labelText,
-            extrusionDepth: 0.001,
-            font: .systemFont(ofSize: CGFloat(radius * 0.6), weight: .bold),
-            containerFrame: .zero,
-            alignment: .center,
-            lineBreakMode: .byClipping
-        )
-        var textMaterial = UnlitMaterial()
-        textMaterial.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.9))
-        let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
-        let textBounds = textMesh.bounds.extents
-        textEntity.position = SIMD3<Float>(-textBounds.x / 2, -textBounds.y / 2, radius * 0.85)
-        textEntity.name = "PointLabel"
-        textEntity.isEnabled = false
-        textEntity.components.set(BillboardComponent())
-        entity.addChild(textEntity)
 
         return entity
     }
