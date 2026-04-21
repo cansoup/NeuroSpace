@@ -57,10 +57,7 @@ struct LobbyView: View {
         VStack(spacing: 18) {
             Spacer(minLength: 8)
 
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 52))
-                .foregroundStyle(accentTeal.opacity(0.8))
-                .shadow(color: accentTeal.opacity(0.4), radius: 12)
+            NeuroLogoMark(size: 64)
 
             VStack(spacing: 4) {
                 HStack(spacing: 0) {
@@ -445,6 +442,54 @@ struct LobbyView: View {
         Button(title, action: action)
             .buttonStyle(.bordered)
             .controlSize(.small)
+    }
+}
+
+// MARK: - Neuro Logo Mark
+
+struct NeuroLogoMark: View {
+    let size: CGFloat
+    @State private var rotation: Double = 0
+    @State private var pulse: Bool = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(accentTeal.opacity(0.5), lineWidth: 1.5)
+                .frame(width: size, height: size)
+
+            Circle()
+                .strokeBorder(accentTeal.opacity(0.3), lineWidth: 1)
+                .frame(width: size * 0.65, height: size * 0.65)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [accentTeal, accentTeal.opacity(0.4)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.18
+                    )
+                )
+                .frame(width: size * 0.28, height: size * 0.28)
+                .shadow(color: accentTeal, radius: pulse ? 14 : 8)
+                .scaleEffect(pulse ? 1.08 : 1.0)
+
+            Circle()
+                .trim(from: 0, to: 0.2)
+                .stroke(accentTeal.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                .frame(width: size * 0.85, height: size * 0.85)
+                .rotationEffect(.degrees(rotation))
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                rotation = 360
+            }
+            withAnimation(.easeInOut(duration: 3).repeatForever()) {
+                pulse = true
+            }
+        }
     }
 }
 
