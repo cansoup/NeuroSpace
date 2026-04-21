@@ -159,6 +159,13 @@ struct ImmersiveView: View {
                 playAnimationIfAvailable(on: idlePose)
             }
 
+            if let progressBar = attachments.entity(for: "progressBar") {
+                progressBar.name = "ProgressBar"
+                progressBar.position = SIMD3<Float>(0.0, -0.16, -0.50)
+                progressBar.scale = SIMD3<Float>(repeating: 0.85)
+                armsAnchor.addChild(progressBar)
+            }
+
             armsAnchor.addChild(armsRoot)
             content.add(armsAnchor)
 
@@ -263,6 +270,11 @@ struct ImmersiveView: View {
 
             Attachment(id: "startPanel") {
                 ImmersiveStartPanel(isHighlighted: startTargetHighlighted)
+            }
+
+            Attachment(id: "progressBar") {
+                BubbleProgressBar()
+                    .environment(appModel)
             }
         }
         .gesture(
