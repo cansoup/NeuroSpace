@@ -745,16 +745,16 @@ struct ImmersiveView: View {
         let textMesh = MeshResource.generateText(
             labelText,
             extrusionDepth: 0.001,
-            font: .systemFont(ofSize: 0.03, weight: .bold),
+            font: .systemFont(ofSize: CGFloat(radius * 0.6), weight: .bold),
             containerFrame: .zero,
             alignment: .center,
             lineBreakMode: .byClipping
         )
         var textMaterial = UnlitMaterial()
-        textMaterial.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.85))
+        textMaterial.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.9))
         let textEntity = ModelEntity(mesh: textMesh, materials: [textMaterial])
         let textBounds = textMesh.bounds.extents
-        textEntity.position = SIMD3<Float>(-textBounds.x / 2, radius + 0.02, 0)
+        textEntity.position = SIMD3<Float>(-textBounds.x / 2, -textBounds.y / 2, radius * 0.85)
         textEntity.components.set(BillboardComponent())
         entity.addChild(textEntity)
 
@@ -763,14 +763,14 @@ struct ImmersiveView: View {
  
     private func makeBubbleMaterial(color: UIColor) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
-        material.baseColor = PhysicallyBasedMaterial.BaseColor(tint: color.withAlphaComponent(0.18))
+        material.baseColor = PhysicallyBasedMaterial.BaseColor(tint: color.withAlphaComponent(0.30))
         material.roughness = PhysicallyBasedMaterial.Roughness(floatLiteral: 0.05)
         material.metallic = PhysicallyBasedMaterial.Metallic(floatLiteral: 0.0)
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.45))
         material.clearcoat = PhysicallyBasedMaterial.Clearcoat(floatLiteral: 1.0)
         material.clearcoatRoughness = PhysicallyBasedMaterial.ClearcoatRoughness(floatLiteral: 0.0)
         material.emissiveColor = PhysicallyBasedMaterial.EmissiveColor(color: color)
-        material.emissiveIntensity = 0.4
+        material.emissiveIntensity = 1.5
         return material
     }
  
