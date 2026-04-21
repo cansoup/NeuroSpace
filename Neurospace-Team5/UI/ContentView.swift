@@ -62,16 +62,17 @@ struct LobbyView: View {
             VStack(spacing: 4) {
                 HStack(spacing: 0) {
                     Text("NEURO")
-                        .foregroundStyle(.white)
+                        .foregroundStyle(DS.textPrimary)
                     Text("SPACE")
-                        .foregroundStyle(accentTeal)
+                        .foregroundStyle(DS.teal)
                 }
-                .font(.system(size: 26, weight: .black, design: .rounded))
+                .font(DS.fontH2)
+                .tracking(DS.heroTracking)
 
                 Text("NEURAL  REHAB  XR")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .tracking(3)
+                    .font(DS.fontMeta)
+                    .foregroundStyle(DS.textTertiary)
+                    .tracking(DS.labelTracking)
             }
 
             EEGWaveformView()
@@ -83,8 +84,8 @@ struct LobbyView: View {
                     .fill(accentTeal)
                     .frame(width: 8, height: 8)
                 Text("EEG LINKED")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(accentTeal)
+                    .font(DS.fontMeta)
+                    .foregroundStyle(DS.teal)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -92,8 +93,9 @@ struct LobbyView: View {
 
             HStack {
                 Text("SIGNAL")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(DS.fontMeta)
+                    .tracking(DS.metaTracking)
+                    .foregroundStyle(DS.textSecondary)
 
                 Spacer()
 
@@ -102,15 +104,15 @@ struct LobbyView: View {
                         Capsule()
                             .fill(.white.opacity(0.1))
                         Capsule()
-                            .fill(accentTeal)
+                            .fill(DS.teal)
                             .frame(width: geo.size.width * 0.87)
                     }
                 }
                 .frame(height: 6)
 
                 Text("87%")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(accentTeal)
+                    .font(DS.fontMeta)
+                    .foregroundStyle(DS.teal)
             }
             .padding(.horizontal, 20)
 
@@ -124,10 +126,7 @@ struct LobbyView: View {
 
     private var menuPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("MENU")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
-                .tracking(2)
+            SectionLabel(text: "Menu", color: DS.textSecondary)
                 .padding(.leading, 4)
 
             menuButton(icon: "play.fill", label: "Start Session", isPrimary: true) {
@@ -163,12 +162,12 @@ struct LobbyView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Last Session")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(DS.fontBody)
+                    .foregroundStyle(DS.textSecondary)
 
                 Text("Stage 3/5  ·  240 pts  ·  4:12")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accentTeal)
+                    .font(DS.fontData)
+                    .foregroundStyle(DS.teal)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,18 +187,18 @@ struct LobbyView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isPrimary ? accentTeal : .white.opacity(0.7))
+                    .foregroundStyle(isPrimary ? DS.teal : DS.textSecondary)
                     .frame(width: 20)
 
                 Text(label)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isPrimary ? accentTeal : .white)
+                    .font(DS.fontButtonSm)
+                    .foregroundStyle(isPrimary ? DS.teal : DS.textPrimary)
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(DS.textTertiary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -224,10 +223,7 @@ struct LobbyView: View {
 
     private var todaysGoalPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("TODAY'S GOAL")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundStyle(accentTeal)
-                .tracking(2)
+            SectionLabel(text: "Today's Goal", color: DS.teal)
 
             goalRow(label: "Reach", value: "3", unit: "sessions")
             goalRow(label: "Duration", value: "15", unit: "min")
@@ -241,16 +237,16 @@ struct LobbyView: View {
     private func goalRow(label: String, value: String, unit: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white.opacity(0.7))
+                .font(DS.fontBody)
+                .foregroundStyle(DS.textSecondary)
             Spacer()
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(accentTeal)
+                    .font(DS.fontH3)
+                    .foregroundStyle(DS.teal)
                 Text(unit)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(DS.fontSmall)
+                    .foregroundStyle(DS.textTertiary)
             }
         }
     }
@@ -260,10 +256,7 @@ struct LobbyView: View {
         let filled = [true, true, true, true, false, false, false]
 
         return VStack(alignment: .leading, spacing: 12) {
-            Text("WEEKLY STREAK")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundStyle(accentTeal)
-                .tracking(2)
+            SectionLabel(text: "Weekly Streak", color: DS.teal)
 
             HStack(spacing: 6) {
                 ForEach(0..<7, id: \.self) { i in
@@ -273,8 +266,8 @@ struct LobbyView: View {
                             .frame(width: 22, height: 28)
 
                         Text(days[i])
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(filled[i] ? accentTeal : .white.opacity(0.3))
+                            .font(DS.fontLabel)
+                            .foregroundStyle(filled[i] ? DS.teal : DS.textTertiary)
                     }
                 }
             }
@@ -362,10 +355,7 @@ struct LobbyView: View {
 
     private var debugHeader: some View {
         HStack {
-            Text("DEBUG")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundStyle(accentTeal)
-                .tracking(2)
+            SectionLabel(text: "Debug", color: DS.teal)
 
             Spacer()
 
@@ -384,10 +374,7 @@ struct LobbyView: View {
 
     private func debugSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.4))
-                .tracking(1)
+            SectionLabel(text: title, color: DS.textTertiary)
 
             content()
         }
@@ -396,12 +383,12 @@ struct LobbyView: View {
     private func debugRow(_ label: String, _ value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .font(DS.fontSmall)
+                .foregroundStyle(DS.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.8))
+                .font(DS.fontSmall)
+                .foregroundStyle(DS.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }

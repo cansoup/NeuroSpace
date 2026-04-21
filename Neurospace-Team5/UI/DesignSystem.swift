@@ -48,6 +48,48 @@ enum DS {
     static let space6: CGFloat = 24
     static let space7: CGFloat = 28
     static let space8: CGFloat = 32
+
+    // MARK: - Typography
+    // Mapped from Space Grotesk → .rounded, Space Mono → .monospaced
+
+    /// Hero brand title — Space Grotesk 700 · 36px · tracking -0.02em
+    static let fontHero = Font.system(size: 36, weight: .bold, design: .rounded)
+    static let heroTracking: CGFloat = -0.7   // -0.02em × 36
+
+    /// Heading 2 — Space Grotesk 700 · 28px
+    static let fontH2 = Font.system(size: 28, weight: .bold, design: .rounded)
+
+    /// Heading 3 — Space Grotesk 700 · 22px
+    static let fontH3 = Font.system(size: 22, weight: .bold, design: .rounded)
+
+    /// Button / CTA — Space Grotesk 600 · 17px
+    static let fontButton = Font.system(size: 17, weight: .semibold, design: .rounded)
+
+    /// Button small — Space Grotesk 600 · 15px
+    static let fontButtonSm = Font.system(size: 15, weight: .semibold, design: .rounded)
+
+    /// Body / description — Space Grotesk 400 · 13px · line-height 1.55
+    static let fontBody = Font.system(size: 13, weight: .regular, design: .rounded)
+
+    /// Section label — Space Mono 400 · 9px · tracking 0.18em · uppercase
+    static let fontLabel = Font.system(size: 9, weight: .regular, design: .monospaced)
+    static let labelTracking: CGFloat = 1.6   // 0.18em × 9
+
+    /// Data / coordinates — Space Mono 400 · 13px · teal
+    static let fontData = Font.system(size: 13, weight: .regular, design: .monospaced)
+
+    /// Meta / status bar — Space Mono 400 · 10px · tracking 0.05em
+    static let fontMeta = Font.system(size: 10, weight: .regular, design: .monospaced)
+    static let metaTracking: CGFloat = 0.5    // 0.05em × 10
+
+    /// Small label — Space Mono 400 · 11px
+    static let fontSmall = Font.system(size: 11, weight: .regular, design: .monospaced)
+
+    // Text Colors
+    static let textPrimary   = Color.white.opacity(0.9)
+    static let textSecondary = Color.white.opacity(0.55)
+    static let textTertiary  = Color.white.opacity(0.3)
+    static let textMeta      = Color.white.opacity(0.25)
 }
 
 // MARK: - Glass Card Modifier
@@ -80,12 +122,12 @@ extension View {
 
 struct SectionLabel: View {
     let text: String
-    var color: Color = .white.opacity(0.3)
+    var color: Color = DS.textTertiary
 
     var body: some View {
         Text(text)
-            .font(.system(size: 9, weight: .regular, design: .monospaced))
-            .tracking(1.5)
+            .font(DS.fontLabel)
+            .tracking(DS.labelTracking)
             .textCase(.uppercase)
             .foregroundStyle(color)
     }
