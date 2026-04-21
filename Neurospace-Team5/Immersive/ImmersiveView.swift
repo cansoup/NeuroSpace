@@ -129,6 +129,10 @@ struct ImmersiveView: View {
             starField.name = "StarField"
             content.add(starField)
 
+            let ambientGrid = makeAmbientGrid()
+            ambientGrid.name = "AmbientGrid"
+            content.add(ambientGrid)
+
             let armsAnchor = AnchorEntity(.head, trackingMode: .continuous)
             armsAnchor.name = "ArmsAnchor"
             bubbleStore.armsAnchor = armsAnchor
@@ -879,6 +883,47 @@ struct ImmersiveView: View {
             root.addChild(star)
         }
         return root
+    }
+
+    private func makeAmbientGrid() -> Entity {
+        let root = Entity()
+        let gridSize: Float = 40.0
+        let spacing: Float = 2.0
+        let lineCount = Int(gridSize / spacing) + 1
+        let halfGrid = gridSize / 2.0
+        let floorY: Float = -0.5
+
+        var lineMaterial = UnlitMaterial()
+        lineMaterial.color = .init(tint: UIColor(red: 0, green: 0.83, blue: 0.67, alpha: 0.04))
+
+        let lineThickness: Float = 0.003
+        let hLine = MeshResource.generateBox(width: gridSize, height: lineThickness, depth: lineThickness)
+        let vLine = MeshResource.generateBox(width: lineThickness, height: lineThickness, depth: gridSize)
+
+        for i in 0..<lineCount {
+            let offset = -halfGrid + Float(i) * spacing
+
+            let h = ModelEntity(mesh: hLine, materials: [lineMaterial])
+            h.position = SIMD3<Float>(0, floorY, offset)
+            root.addChild(h)
+
+            let v = ModelEntity(mesh: vLine, materials: [lineMaterial])
+            v.position = SIMD3<Float>(offset, floorY, 0)
+            root.addChild(v)
+        }
+
+        var glowMaterial = UnlitMaterial()
+        glowMaterial.color = .init(tint: UIColor(red: 0, green: 0.83, blue: 0.67, alpha: 0.06))
+        let glow = ModelEntity(
+            mesh: .generatePlane(width: 8, depth: 8),
+            materials: [glowMaterial]
+        )
+        glow.position = SIMD3<Float>(0, floorY + 0.001, 0)
+        root.addChild(glow)
+
+        let anchor = AnchorEntity(world: .zero)
+        anchor.addChild(root)
+        return anchor
     }
 
     private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
