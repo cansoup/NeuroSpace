@@ -30,6 +30,11 @@ struct Neurospace_Team5App: App {
         }
         .defaultSize(width: 400, height: 320)
 
+        ImmersiveSpace(id: appModel.lobbySkyboxID) {
+            LobbySkyboxView()
+        }
+        .immersionStyle(selection: .constant(.full), in: .full)
+
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()
                 .environment(appModel)
@@ -40,6 +45,6 @@ struct Neurospace_Team5App: App {
                     appModel.immersiveSpaceState = .closed
                 }
         }
-        .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        .immersionStyle(selection: .constant(.full), in: .full)
     }
 }

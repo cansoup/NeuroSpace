@@ -83,7 +83,7 @@ struct CongratsView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.purple)
+            .tint(DS.teal)
             .controlSize(.large)
         }
         .padding(40)
@@ -169,7 +169,7 @@ struct MissionFailedView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(DS.teal)
                 .controlSize(.large)
             }
         }
@@ -207,10 +207,10 @@ struct GameControlPanel: View {
 
     private var eegColor: Color {
         switch controller.connectionState {
-        case .connected:    return .green
-        case .connecting:   return .yellow
-        case .disconnected: return .orange
-        case .failed:       return .red
+        case .connected:    return DS.success
+        case .connecting:   return DS.warning
+        case .disconnected: return DS.gold
+        case .failed:       return DS.error
         }
     }
 
@@ -310,5 +310,41 @@ struct GameControlPanel: View {
         }
         .frame(width: 320)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+    }
+}
+
+// MARK: - Bubble Progress Bar (head-anchored, bottom of view)
+
+struct BubbleProgressBar: View {
+    @Environment(AppModel.self) private var appModel
+
+    private var controller: BubbleGameController { appModel.gameController }
+    private var isPlaying: Bool { controller.sessionState == .playing }
+
+    var body: some View {
+        if isPlaying {
+            VStack(spacing: 6) {
+                HStack(spacing: 0) {
+                    ForEach(0..<controller.totalBubbleCount, id: \.self) { i in
+                        Capsule()
+                            .fill(i < controller.poppedCount ? DS.teal : Color.white.opacity(0.25))
+                            .frame(height: 8)
+                            .animation(.easeInOut(duration: 0.25), value: controller.poppedCount)
+                        if i < controller.totalBubbleCount - 1 {
+                            Spacer().frame(width: 3)
+                        }
+                    }
+                }
+
+                Text("\(controller.poppedCount) / \(controller.totalBubbleCount)")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(width: 260)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .transition(.opacity)
+        }
     }
 }

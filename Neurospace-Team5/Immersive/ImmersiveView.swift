@@ -2,14 +2,14 @@
 //  ImmersiveView.swift
 //  Neurospace-Team5
 //
-
+ 
 import SwiftUI
 import RealityKit
 import RealityKitContent
 import ARKit
 import simd
 import QuartzCore
-
+ 
 private enum BubbleZone: String, CaseIterable {
     case upperLeft
     case upperMiddle
@@ -20,7 +20,7 @@ private enum BubbleZone: String, CaseIterable {
     case lowerLeft
     case lowerMiddle
     case lowerRight
-
+ 
     var assetName: String {
         switch self {
         case .upperLeft: return "upperleft"
@@ -35,28 +35,28 @@ private enum BubbleZone: String, CaseIterable {
         }
     }
 }
-
+ 
 private enum PoseVariant: String {
     case left = "L"
     case right = "R"
 }
-
+ 
 private struct ArmVisualTransform {
     let position: SIMD3<Float>
     let scale: SIMD3<Float>
     let orientation: simd_quatf
 }
-
+ 
 struct ImmersiveView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
-
+ 
     @State private var startHoverBeganAt: Date? = nil
     @State private var startTargetHighlighted = false
     @State private var clickCount: Int = 0       // increments on every tap while playing
-
+ 
     /// Class wrapper so mutations don't trigger SwiftUI re-renders or
     /// "Modifying state during view update" warnings.
     private final class BubbleEntityStore {
@@ -69,24 +69,24 @@ struct ImmersiveView: View {
         let worldTracking = WorldTrackingProvider()
         var arSessionStarted = false
     }
-
+ 
     private let worldAnchorOffset = SIMD3<Float>(0, 1.45, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
-
+ 
     private let startOrbPosition = SIMD3<Float>(0.0, -0.06, 0.02)
     private let startPanelPosition = SIMD3<Float>(0.0, 0.20, 0.02)
-
+ 
     var body: some View {
         RealityView { content, attachments in
             let worldAnchor = AnchorEntity(world: worldAnchorOffset)
             worldAnchor.name = "WorldAnchor"
-
+ 
             let root = Entity()
             root.name = "Root"
             root.position = .zero
-
+ 
             // Bubbles are managed via bubbleStore in syncBubbles; none are needed here.
-
+ 
             // Large invisible background entity that catches taps in empty space.
             // Placed behind the bubble interaction zone so bubble entities take
             // priority when directly targeted; misses fall through to this plane.
@@ -100,38 +100,42 @@ struct ImmersiveView: View {
             bgEntity.isEnabled = false   // enabled only while session is playing
             root.addChild(bgEntity)
             bubbleStore.backgroundPlane = bgEntity
-
+ 
             let startOrb = makeStartOrbEntity(
                 name: "StartOrb",
                 position: startOrbPosition,
                 highlighted: false
             )
             root.addChild(startOrb)
-
+ 
             if let panel = attachments.entity(for: "controlPanel") {
                 panel.name = "ControlPanel"
                 panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
                 panel.scale = SIMD3<Float>(repeating: 0.92)
                 root.addChild(panel)
             }
-
+ 
             if let startPanel = attachments.entity(for: "startPanel") {
                 startPanel.name = "StartPanel"
                 startPanel.position = startPanelPosition
                 root.addChild(startPanel)
             }
-
+ 
             worldAnchor.addChild(root)
             content.add(worldAnchor)
             bubbleStore.worldAnchor = worldAnchor
-
+ 
+            let starField = makeStarField(count: 300, radius: 20.0)
+            starField.name = "StarField"
+            content.add(starField)
+ 
             let armsAnchor = AnchorEntity(.head, trackingMode: .continuous)
             armsAnchor.name = "ArmsAnchor"
             bubbleStore.armsAnchor = armsAnchor
-
+ 
             let armsRoot = Entity()
             armsRoot.name = "ArmsRoot"
-
+ 
             for zone in BubbleZone.allCases {
                 if let sourcePose = await loadArmEntity(named: zone.assetName) {
                     let rightPose = sourcePose.clone(recursive: true)
@@ -139,29 +143,41 @@ struct ImmersiveView: View {
                     rightPose.name = poseName(for: zone, variant: .right)
                     rightPose.isEnabled = false
                     armsRoot.addChild(rightPose)
-
+ 
                     let leftPose = sourcePose.clone(recursive: true)
                     configurePoseEntity(leftPose, for: zone, variant: .left)
                     leftPose.name = poseName(for: zone, variant: .left)
                     leftPose.isEnabled = false
                     armsRoot.addChild(leftPose)
-
+ 
                     print("Loaded arm pose variants: \(zone.assetName)")
                 } else {
                     print("Failed to load arm pose: \(zone.assetName)")
                 }
             }
-
+ 
             if let idlePose = armsRoot.findEntity(
                 named: poseName(for: .middleMiddle, variant: .right)
             ) {
                 idlePose.isEnabled = true
-                playAnimationIfAvailable(on: idlePose)
+                // Intentionally NOT calling playAnimationIfAvailable here.
+                // Playing the baked animation on load leaves the arm in its
+                // final (reaching) pose, and the next isEnabled toggle can
+                // then reset it visibly — looking like the animation "goes
+                // off" at the .ready → .playing transition. Taps are the
+                // only thing that should trigger the reach animation.
             }
-
+ 
+            if let progressBar = attachments.entity(for: "progressBar") {
+                progressBar.name = "ProgressBar"
+                progressBar.position = SIMD3<Float>(0.0, -0.16, -0.50)
+                progressBar.scale = SIMD3<Float>(repeating: 0.85)
+                armsAnchor.addChild(progressBar)
+            }
+ 
             armsAnchor.addChild(armsRoot)
             content.add(armsAnchor)
-
+ 
         } update: { content, _ in
             guard
                 let worldAnchor = content.entities.first(where: { $0.name == "WorldAnchor" }),
@@ -170,31 +186,38 @@ struct ImmersiveView: View {
                 let armsAnchor = content.entities.first(where: { $0.name == "ArmsAnchor" }),
                 let armsRoot = armsAnchor.findEntity(named: "ArmsRoot")
             else { return }
-
+ 
             let controller = appModel.gameController
             // isReadyStage: controls StartOrb UI — only shown in .ready state
             let isReadyStage = controller.sessionState == .ready
             // useIdleArm: controls arm pose — idle in .ready and .finished to avoid
             // the arm pointing at the last-popped bubble during stage transitions
             let useIdleArm = controller.sessionState == .ready || controller.sessionState == .finished
-
+ 
             let activeState = controller.activeArm == .left
                 ? controller.leftArmState
                 : controller.rightArmState
-
+ 
             let zoneToShow: BubbleZone
             let variantToShow: PoseVariant
-
+ 
             // Arm always points center (middleMiddle) — direction is handled by gaze targeting
             zoneToShow = .middleMiddle
             variantToShow = useIdleArm ? .right : (controller.activeArm == .left ? .left : .right)
-
+ 
             updateArmPoseDisplay(
                 in: armsRoot,
                 zone: zoneToShow,
-                variant: variantToShow
+                variant: variantToShow,
+                // Suppress the pose-change animation on the .ready → .playing
+                // transition. In that transition the visible pose entity's name
+                // changes (idle right → active left/right), which would otherwise
+                // be interpreted as a "pose changed, replay animation" event and
+                // trigger an unwanted arm swing the moment the session starts.
+                // Taps still drive arm animation independently via clickCount.
+                animateOnChange: controller.sessionState == .playing
             )
-
+ 
             // Re-trigger arm animation on every tap while playing.
             // Mutation goes through bubbleStore (class), not @State, to avoid
             // "Modifying state during view update" warnings.
@@ -209,14 +232,14 @@ struct ImmersiveView: View {
                     }
                 }
             }
-
+ 
             updateArmsRootTransform(
                 armsRoot,
                 activeState: activeState,
                 activeArm: controller.activeArm,
                 isReadyStage: useIdleArm
             )
-
+ 
             // Gaze-based targeting using coordinate-space conversion.
             // bubble.position is in worldAnchor-local space.
             // armsAnchor.convert(position:from:) maps it to head-local space without
@@ -227,16 +250,15 @@ struct ImmersiveView: View {
             // @Observable state during the view update cycle.
             // Gaze targeting runs from the .task loop via updateGazeAndFOV(),
             // because the update closure does not re-run on head motion alone.
-
+ 
             if isReadyStage {
                 removeAllBubbleEntities(from: root)
             } else {
-                syncBubbles(in: root, with: controller.bubbles,
-                            targetedID: controller.targetedBubbleID)
+                syncBubbles(in: root, with: controller.bubbles)
             }
-
+ 
             let showStartTarget = isReadyStage
-
+ 
             startOrb.isEnabled = showStartTarget
             startOrb.position = startOrbPosition
             updateStartOrbAppearance(
@@ -244,25 +266,30 @@ struct ImmersiveView: View {
                 highlighted: startTargetHighlighted,
                 visible: showStartTarget
             )
-
+ 
             if let startPanel = root.findEntity(named: "StartPanel") {
                 startPanel.isEnabled = showStartTarget
                 startPanel.position = startPanelPosition
             }
-
+ 
             if let panel = root.findEntity(named: "ControlPanel") {
                 panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
                 panel.scale = SIMD3<Float>(repeating: 0.92)
             }
-
+ 
         } attachments: {
             Attachment(id: "controlPanel") {
                 GameControlPanel()
                     .environment(appModel)
             }
-
+ 
             Attachment(id: "startPanel") {
                 ImmersiveStartPanel(isHighlighted: startTargetHighlighted)
+            }
+ 
+            Attachment(id: "progressBar") {
+                BubbleProgressBar()
+                    .environment(appModel)
             }
         }
         .gesture(
@@ -270,33 +297,29 @@ struct ImmersiveView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in
                     let name = value.entity.name
-
+ 
                     // Ready state: only StartOrb starts the session
                     if name == "StartOrb", appModel.gameController.sessionState == .ready {
                         triggerSessionStart()
                         return
                     }
-
+ 
                     guard appModel.gameController.sessionState == .playing else { return }
-
+ 
                     // Empty-space tap: background entity caught the hit → arm animation only
                     if name == "BackgroundPlane" {
                         clickCount += 1
                         return
                     }
-
+ 
                     guard name.hasPrefix("Bubble_") else { return }
-
-                    // Any bubble tap triggers arm animation
+ 
                     clickCount += 1
 
-                    // Only pop if the tapped bubble is the currently targeted one.
-                    // Tapping a non-targeted bubble triggers arm animation but no pop.
                     let uuidString = String(name.dropFirst("Bubble_".count))
-                    guard let tappedID = UUID(uuidString: uuidString),
-                          tappedID == appModel.gameController.targetedBubbleID else { return }
+                    guard let tappedID = UUID(uuidString: uuidString) else { return }
 
-                    appModel.gameController.popTargetedBubble()
+                    appModel.gameController.popBubble(withID: tappedID)
                 }
         )
         .onChange(of: appModel.gameController.sessionState) { _, newState in
@@ -304,13 +327,13 @@ struct ImmersiveView: View {
                 startHoverBeganAt = nil
                 startTargetHighlighted = false
             }
-
+ 
             guard newState == .finished else { return }
-
+ 
             Task { @MainActor in
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
-
+ 
                 switch appModel.gameController.finishReason {
                 case .allPopped:
                     openWindow(id: appModel.congratsWindowID)
@@ -332,7 +355,7 @@ struct ImmersiveView: View {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
                 updatePreSessionStartInteraction()
                 updateGazeAndFOV()
-
+ 
                 do {
                     try await Task.sleep(for: .seconds(1.0 / 60.0))
                 } catch {
@@ -342,34 +365,34 @@ struct ImmersiveView: View {
         }
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
-
+ 
             appModel.shouldEndSession = false
-
+ 
             Task { @MainActor in
                 appModel.gameController.resetGame()
                 startHoverBeganAt = nil
                 startTargetHighlighted = false
                 clickCount = 0
                 bubbleStore.lastSeenClickCount = 0
-
+ 
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
-
+ 
                 if appModel.immersiveSpaceState == .open {
                     appModel.immersiveSpaceState = .inTransition
                     await dismissImmersiveSpace()
                     appModel.immersiveSpaceState = .closed
                 }
-
+ 
                 openWindow(id: appModel.mainWindowID)
             }
         }
     }
-
+ 
     private func poseName(for zone: BubbleZone, variant: PoseVariant) -> String {
         "Pose_\(variant.rawValue)_\(zone.rawValue)"
     }
-
+ 
     private func loadArmEntity(named name: String) async -> Entity? {
         do {
             return try await Entity(named: name, in: realityKitContentBundle)
@@ -378,7 +401,7 @@ struct ImmersiveView: View {
             return nil
         }
     }
-
+ 
     private func configurePoseEntity(
         _ entity: Entity,
         for zone: BubbleZone,
@@ -389,19 +412,19 @@ struct ImmersiveView: View {
         entity.scale = transform.scale
         entity.orientation = transform.orientation
     }
-
+ 
     private func transformForZone(
         _ zone: BubbleZone,
         variant: PoseVariant
     ) -> ArmVisualTransform {
         let baseScale = SIMD3<Float>(repeating: 0.90)
-
+ 
         let rotateX = simd_quatf(angle: .pi * 0.5, axis: SIMD3<Float>(1, 0, 0))
         let rotateY = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
         let baseOrientation = rotateX * rotateY
-
+ 
         let rightTransform: ArmVisualTransform
-
+ 
         switch zone {
         case .upperLeft:
             rightTransform = ArmVisualTransform(
@@ -411,14 +434,14 @@ struct ImmersiveView: View {
                     * simd_quatf(angle: -.pi / 10, axis: SIMD3<Float>(0, 1, 0))
                     * simd_quatf(angle: -.pi / 20, axis: SIMD3<Float>(0, 0, 1))
             )
-
+ 
         case .upperMiddle:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(0.0, -0.24, -0.30),
                 scale: baseScale,
                 orientation: baseOrientation
             )
-
+ 
         case .upperRight:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(0.02, -0.25, -0.30),
@@ -426,7 +449,7 @@ struct ImmersiveView: View {
                 orientation: baseOrientation
                     * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(0, 1, 0))
             )
-
+ 
         case .middleLeft:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(-0.04, -0.31, -0.30),
@@ -434,14 +457,14 @@ struct ImmersiveView: View {
                 orientation: baseOrientation
                     * simd_quatf(angle: -.pi / 8, axis: SIMD3<Float>(0, 1, 0))
             )
-
+ 
         case .middleMiddle:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(0.0, -0.30, -0.30),
                 scale: baseScale,
                 orientation: baseOrientation
             )
-
+ 
         case .middleRight:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(0.06, -0.35, -0.28),
@@ -450,7 +473,7 @@ struct ImmersiveView: View {
                     * simd_quatf(angle: .pi / 10, axis: SIMD3<Float>(0, 1, 0))
                     * simd_quatf(angle: -.pi / 16, axis: SIMD3<Float>(1, 0, 0))
             )
-
+ 
         case .lowerLeft:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(-0.03, -0.37, -0.28),
@@ -459,7 +482,7 @@ struct ImmersiveView: View {
                     * simd_quatf(angle: -.pi / 9, axis: SIMD3<Float>(0, 1, 0))
                     * simd_quatf(angle: .pi / 14, axis: SIMD3<Float>(0, 0, 1))
             )
-
+ 
         case .lowerMiddle:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(0.0, -0.39, -0.28),
@@ -467,7 +490,7 @@ struct ImmersiveView: View {
                 orientation: baseOrientation
                     * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(1, 0, 0))
             )
-
+ 
         case .lowerRight:
             rightTransform = ArmVisualTransform(
                 position: SIMD3<Float>(0.04, -0.37, -0.28),
@@ -477,52 +500,52 @@ struct ImmersiveView: View {
                     * simd_quatf(angle: -.pi / 14, axis: SIMD3<Float>(0, 0, 1))
             )
         }
-
+ 
         guard variant == .left else { return rightTransform }
-
+ 
         let mirroredPosition = SIMD3<Float>(
             -rightTransform.position.x,
             rightTransform.position.y,
             rightTransform.position.z
         )
-
+ 
         var mirroredScale = rightTransform.scale
         mirroredScale.x *= -1
-
+ 
         let mirroredOrientation =
             simd_quatf(angle: -.pi / 6, axis: SIMD3<Float>(0, 1, 0)) *
             rightTransform.orientation
-
+ 
         return ArmVisualTransform(
             position: mirroredPosition,
             scale: mirroredScale,
             orientation: mirroredOrientation
         )
     }
-
+ 
     private func currentVisibleZone(in armsRoot: Entity, variant: PoseVariant) -> BubbleZone? {
         let prefix = "Pose_\(variant.rawValue)_"
-
+ 
         for child in armsRoot.children where child.isEnabled {
             guard child.name.hasPrefix(prefix) else { continue }
             let suffix = String(child.name.dropFirst(prefix.count))
             return BubbleZone(rawValue: suffix)
         }
-
+ 
         return nil
     }
-
+ 
     private func stableVisualZone(
         for state: ArmState,
         currentZone: BubbleZone?
     ) -> BubbleZone {
         let delta = state.tipPosition - state.basePosition
-
+ 
         let verticalThresholdHigh: Float = 0.15
         let verticalThresholdLow: Float = 0.09
         let horizontalThresholdHigh: Float = 0.11
         let horizontalThresholdLow: Float = 0.06
-
+ 
         let vertical: Int
         switch currentZone {
         case .some(.upperLeft), .some(.upperMiddle), .some(.upperRight):
@@ -538,7 +561,7 @@ struct ImmersiveView: View {
                 vertical = 0
             }
         }
-
+ 
         let horizontal: Int
         switch currentZone {
         case .some(.upperLeft), .some(.middleLeft), .some(.lowerLeft):
@@ -554,7 +577,7 @@ struct ImmersiveView: View {
                 horizontal = 0
             }
         }
-
+ 
         switch (vertical, horizontal) {
         case (1, -1): return .upperLeft
         case (1, 0): return .upperMiddle
@@ -568,27 +591,37 @@ struct ImmersiveView: View {
         default: return .middleMiddle
         }
     }
-
+ 
     private func updateArmPoseDisplay(
         in armsRoot: Entity,
         zone: BubbleZone,
-        variant: PoseVariant
+        variant: PoseVariant,
+        animateOnChange: Bool
     ) {
         let targetName = poseName(for: zone, variant: variant)
         let currentlyVisibleName = armsRoot.children.first(where: { $0.isEnabled })?.name
-
+ 
+        // Nothing to change — don't touch isEnabled flags. Toggling isEnabled
+        // on a pose whose baked animation has already played can reset it to
+        // its rest pose, which looks like the arm animation re-firing. This
+        // early return is what prevents the unwanted arm swing on the
+        // .ready → .playing transition (where targetName stays the same).
+        guard currentlyVisibleName != targetName else { return }
+ 
         for child in armsRoot.children {
             child.isEnabled = child.name == targetName
         }
-
-        // Play (or restart looping) animation whenever the active pose changes.
-        // Also plays on first call when currentlyVisibleName is nil (fresh scene).
-        if currentlyVisibleName != targetName,
-           let pose = armsRoot.findEntity(named: targetName) {
+ 
+        // Play (or restart looping) animation whenever the active pose changes,
+        // but only while the game is actively playing. Prevents an unwanted
+        // arm swing on transitions into .ready / .finished.
+        guard animateOnChange else { return }
+ 
+        if let pose = armsRoot.findEntity(named: targetName) {
             playAnimationIfAvailable(on: pose)
         }
     }
-
+ 
     private func updateArmsRootTransform(
         _ armsRoot: Entity,
         activeState: ArmState,
@@ -596,27 +629,21 @@ struct ImmersiveView: View {
         isReadyStage: Bool
     ) {
         let targetTransform: Transform
-
-        if isReadyStage {
-            targetTransform = Transform(
-                scale: SIMD3<Float>(repeating: 1.0),
-                rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
-                translation: SIMD3<Float>(0.0, -0.16, -0.16)
-            )
-        } else {
-            // Fix armsRoot at a constant position — arm direction is expressed
-            // entirely through USDZ pose selection (stableVisualZone).
-            // Delta-based translation caused the center to shift when tipPosition
-            // jumped (e.g. clicking a left-side bubble with the right arm).
-            targetTransform = Transform(
-                scale: SIMD3<Float>(repeating: 1.0),
-                rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
-                translation: SIMD3<Float>(0.0, -0.30, -0.30)
-            )
-        }
-
+ 
+        // armsRoot stays at the origin of armsAnchor (which is head-anchored).
+        // The per-pose offset (~-0.30 y, -0.30 z) is already baked into each
+        // pose entity by configurePoseEntity / transformForZone, so translating
+        // armsRoot here would compound the offset and push the arms way out
+        // and down in front of the user (arms appear low and small).
+        _ = isReadyStage
+        targetTransform = Transform(
+            scale: SIMD3<Float>(repeating: 1.0),
+            rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
+            translation: .zero
+        )
+ 
         let duration: TimeInterval = isReadyStage ? 0.20 : 0.10
-
+ 
         armsRoot.move(
             to: targetTransform,
             relativeTo: armsRoot.parent,
@@ -624,7 +651,7 @@ struct ImmersiveView: View {
             timingFunction: .easeInOut
         )
     }
-
+ 
     private func playAnimationIfAvailable(on entity: Entity) {
         if let animatedEntity = findAnimatedEntity(in: entity),
            let animation = animatedEntity.availableAnimations.last {
@@ -635,42 +662,42 @@ struct ImmersiveView: View {
             )
         }
     }
-
+ 
     private func findAnimatedEntity(in entity: Entity) -> Entity? {
         for child in entity.children {
             if let animatedChild = findAnimatedEntity(in: child) {
                 return animatedChild
             }
         }
-
+ 
         if !entity.availableAnimations.isEmpty {
             return entity
         }
-
+ 
         return nil
     }
-
+ 
     @MainActor
     private func updatePreSessionStartInteraction() {
         let controller = appModel.gameController
-
+ 
         guard controller.sessionState == .ready else {
             startHoverBeganAt = nil
             startTargetHighlighted = false
             return
         }
-
+ 
         let activeTip = controller.activeArm == .left
             ? controller.leftArmState.tipPosition
             : controller.rightArmState.tipPosition
-
+ 
         let distance = simd_distance(activeTip, startOrbPosition)
         let hoverRadius: Float = 0.10
         let dwellDuration: TimeInterval = 0.45
-
+ 
         if distance <= hoverRadius {
             startTargetHighlighted = true
-
+ 
             if startHoverBeganAt == nil {
                 startHoverBeganAt = Date()
             } else if let began = startHoverBeganAt,
@@ -682,54 +709,17 @@ struct ImmersiveView: View {
             startTargetHighlighted = false
         }
     }
-
+ 
     @MainActor
     private func updateGazeAndFOV() {
-        let controller = appModel.gameController
-        let playingNow = controller.sessionState == .playing
+        let playingNow = appModel.gameController.sessionState == .playing
 
-        // Background plane catches empty-space taps for arm animation, but
-        // must be disabled outside of .playing so SwiftUI windows (Congrats /
-        // MissionFailed) are not occluded and can receive taps.
         if let plane = bubbleStore.backgroundPlane, plane.isEnabled != playingNow {
             plane.isEnabled = playingNow
         }
 
-        guard bubbleStore.worldTracking.state == .running,
-              let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
-                atTimestamp: CACurrentMediaTime()
-              )
-        else { return }
-
-        let headFromWorld = simd_inverse(deviceAnchor.originFromAnchorTransform)
-        let centerConeRadians: Float = 15.0 * .pi / 180.0
-
-        var bestAngle: Float = .greatestFiniteMagnitude
-        var bestID: UUID? = nil
-
-        for bubble in controller.bubbles where !bubble.isGone {
-            let bubbleWorld = bubble.position + worldAnchorOffset
-            let bubbleWorld4 = SIMD4<Float>(bubbleWorld.x, bubbleWorld.y, bubbleWorld.z, 1)
-            let headLocal4 = headFromWorld * bubbleWorld4
-            let p = SIMD3<Float>(headLocal4.x, headLocal4.y, headLocal4.z)
-
-            // Forward is -z in head-local space.
-            guard p.z < 0 else { continue }
-
-            let lateral = (p.x * p.x + p.y * p.y).squareRoot()
-            let angle = atan2(lateral, abs(p.z))
-
-            if playingNow && angle < bestAngle && angle <= centerConeRadians {
-                bestAngle = angle
-                bestID = bubble.id
-            }
-        }
-
-        if controller.targetedBubbleID != bestID {
-            controller.targetedBubbleID = bestID
-        }
     }
-
+ 
     @MainActor
     private func triggerSessionStart() {
         guard appModel.gameController.sessionState == .ready else { return }
@@ -737,88 +727,67 @@ struct ImmersiveView: View {
         startTargetHighlighted = false
         appModel.gameController.startSession()
     }
-
-    private func makeBubbleEntity(for bubble: Bubble, isTargeted: Bool = false) -> ModelEntity {
+ 
+    private func makeBubbleEntity(for bubble: Bubble) -> ModelEntity {
         let radius = appModel.gameController.stageConfig.bubbleRadius
 
         let entity = ModelEntity(
             mesh: .generateSphere(radius: radius),
-            materials: [makeBubbleMaterial(color: bubble.type.uiColor, isTargeted: isTargeted)]
+            materials: [makeBubbleMaterial(color: bubble.type.uiColor)]
         )
 
         entity.name = "Bubble_\(bubble.id.uuidString)"
         entity.position = bubble.position
-        entity.scale = isTargeted ? SIMD3<Float>(repeating: 1.3) : SIMD3<Float>(repeating: 1.0)
         entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
         entity.components.set(InputTargetComponent())
+        entity.components.set(HoverEffectComponent())
 
         return entity
     }
-
-    private func makeBubbleMaterial(color: UIColor, isTargeted: Bool = false) -> PhysicallyBasedMaterial {
+ 
+    private func makeBubbleMaterial(color: UIColor) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
-
-        if isTargeted {
-            // Targeted: solid bright white-tinted version of the bubble color + strong glow
-            material.baseColor = PhysicallyBasedMaterial.BaseColor(tint: UIColor.white)
-            material.roughness = PhysicallyBasedMaterial.Roughness(floatLiteral: 0.0)
-            material.metallic = PhysicallyBasedMaterial.Metallic(floatLiteral: 0.0)
-            material.blending = .transparent(opacity: .init(floatLiteral: 0.92))
-            material.clearcoat = PhysicallyBasedMaterial.Clearcoat(floatLiteral: 1.0)
-            material.clearcoatRoughness = PhysicallyBasedMaterial.ClearcoatRoughness(floatLiteral: 0.0)
-            material.emissiveColor = PhysicallyBasedMaterial.EmissiveColor(color: color)
-            material.emissiveIntensity = 3.0
-        } else {
-            // Normal: translucent with bubble's own color
-            material.baseColor = PhysicallyBasedMaterial.BaseColor(tint: color.withAlphaComponent(0.25))
-            material.roughness = PhysicallyBasedMaterial.Roughness(floatLiteral: 0.0)
-            material.metallic = PhysicallyBasedMaterial.Metallic(floatLiteral: 0.0)
-            material.blending = .transparent(opacity: .init(floatLiteral: 0.25))
-            material.clearcoat = PhysicallyBasedMaterial.Clearcoat(floatLiteral: 1.0)
-            material.clearcoatRoughness = PhysicallyBasedMaterial.ClearcoatRoughness(floatLiteral: 0.0)
-        }
-
+        material.baseColor = PhysicallyBasedMaterial.BaseColor(tint: color.withAlphaComponent(0.30))
+        material.roughness = PhysicallyBasedMaterial.Roughness(floatLiteral: 0.05)
+        material.metallic = PhysicallyBasedMaterial.Metallic(floatLiteral: 0.0)
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.45))
+        material.clearcoat = PhysicallyBasedMaterial.Clearcoat(floatLiteral: 1.0)
+        material.clearcoatRoughness = PhysicallyBasedMaterial.ClearcoatRoughness(floatLiteral: 0.0)
+        material.emissiveColor = PhysicallyBasedMaterial.EmissiveColor(color: color)
+        material.emissiveIntensity = 1.5
         return material
     }
-
-    private func syncBubbles(in root: Entity, with bubbles: [Bubble], targetedID: UUID?) {
+ 
+    private func syncBubbles(in root: Entity, with bubbles: [Bubble]) {
         let activeIDs = Set(bubbles.filter { !$0.isGone }.map { $0.id })
 
-        // Remove entities whose bubbles are gone (popped / expired)
         let goneIDs = bubbleStore.entities.keys.filter { !activeIDs.contains($0) }
         for id in goneIDs {
             bubbleStore.entities[id]?.removeFromParent()
             bubbleStore.entities.removeValue(forKey: id)
         }
 
-        // Add or update active bubbles using stored references — bypasses the
-        // RealityView content API limitation where root.children only reflects
-        // entities from the make closure, not those added in prior update calls.
         for bubble in bubbles where !bubble.isGone {
-            let isTargeted = bubble.id == targetedID
-
             if let entity = bubbleStore.entities[bubble.id] {
                 entity.position = bubble.position
-                entity.model?.materials = [makeBubbleMaterial(color: bubble.type.uiColor, isTargeted: isTargeted)]
-                entity.scale = isTargeted ? SIMD3<Float>(repeating: 1.3) : SIMD3<Float>(repeating: 1.0)
             } else {
-                let entity = makeBubbleEntity(for: bubble, isTargeted: isTargeted)
+                let entity = makeBubbleEntity(for: bubble)
                 root.addChild(entity)
                 bubbleStore.entities[bubble.id] = entity
             }
         }
     }
-
+ 
     private func removeAllBubbleEntities(from root: Entity) {
         bubbleStore.entities.values.forEach { $0.removeFromParent() }
         bubbleStore.entities.removeAll()
     }
-
+ 
     private func makeStartOrbEntity(name: String, position: SIMD3<Float>, highlighted: Bool) -> ModelEntity {
         var material = PhysicallyBasedMaterial()
         material.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
         material.emissiveColor = .init(color: highlighted ? .white : .systemPink)
-
+ 
         let entity = ModelEntity(
             mesh: .generateSphere(radius: highlighted ? 0.055 : 0.045),
             materials: [material]
@@ -827,15 +796,49 @@ struct ImmersiveView: View {
         entity.position = position
         entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.06)]))
         entity.components.set(InputTargetComponent())
-
+ 
         return entity
     }
-
+ 
+    private func makeStarField(count: Int, radius: Float) -> Entity {
+        let root = Entity()
+        for _ in 0..<count {
+            let theta = Float.random(in: 0...(2 * .pi))
+            let phi = acos(Float.random(in: -1...1))
+            let r = radius * Float.random(in: 0.85...1.0)
+ 
+            let x = r * sin(phi) * cos(theta)
+            let y = r * sin(phi) * sin(theta)
+            let z = r * cos(phi)
+ 
+            let size = Float.random(in: 0.01...0.04)
+            let brightness = Float.random(in: 0.5...1.0)
+ 
+            var material = UnlitMaterial()
+            let roll = Int.random(in: 0...100)
+            if roll < 5 {
+                material.color = .init(tint: UIColor(red: 0.7, green: 0.85, blue: 1.0, alpha: CGFloat(brightness)))
+            } else if roll < 8 {
+                material.color = .init(tint: UIColor(red: 1.0, green: 0.9, blue: 0.7, alpha: CGFloat(brightness)))
+            } else {
+                material.color = .init(tint: UIColor(white: CGFloat(brightness), alpha: 1.0))
+            }
+ 
+            let star = ModelEntity(
+                mesh: .generateSphere(radius: size),
+                materials: [material]
+            )
+            star.position = SIMD3<Float>(x, y, z)
+            root.addChild(star)
+        }
+        return root
+    }
+ 
     private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
         entity.scale = visible
             ? (highlighted ? SIMD3<Float>(repeating: 1.18) : SIMD3<Float>(repeating: 1.0))
             : SIMD3<Float>(repeating: 0.001)
-
+ 
         if var material = entity.model?.materials.first as? PhysicallyBasedMaterial {
             material.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
             material.emissiveColor = .init(color: highlighted ? .white : .systemPink)
@@ -843,22 +846,22 @@ struct ImmersiveView: View {
         }
     }
 }
-
+ 
 // MARK: - Immersive Start Panel
-
+ 
 struct ImmersiveStartPanel: View {
     let isHighlighted: Bool
-
+ 
     var body: some View {
         VStack(spacing: 10) {
             Text("Ready to Begin?")
                 .font(.system(size: 18, weight: .bold, design: .rounded))
-
+ 
             Text("Move the active arm onto the glowing orb to start.")
                 .font(.system(size: 13, weight: .medium))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
-
+ 
             Text(isHighlighted ? "Hold steady..." : "Awaiting arm input")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(isHighlighted ? .green : .purple)

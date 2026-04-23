@@ -11,6 +11,7 @@ import Observation
 @Observable
 final class AppModel {
     let immersiveSpaceID = "ImmersiveSpace"
+    let lobbySkyboxID = "LobbySkybox"
     let mainWindowID = "main"
     let congratsWindowID = "congrats"
     let missionFailedWindowID = "missionFailed"

@@ -146,6 +146,10 @@ final class BubbleGameController {
 
     // MARK: - Stage progression
 
+    var poppedCount: Int { bubbles.filter(\.isPopped).count }
+    var totalBubbleCount: Int { stageConfig.bubbleCount }
+    var stageProgress: Float { totalBubbleCount > 0 ? Float(poppedCount) / Float(totalBubbleCount) : 0 }
+
     var canAdvanceStage: Bool { currentStage < StageConfig.totalStages }
     var isOnFinalStage: Bool { currentStage >= StageConfig.totalStages }
 
