@@ -1,0 +1,40 @@
+{
+  "advancedEditorSelectedIdentifier" : "ProjectBrowser",
+  "openSceneRelativePaths" : [
+    "Immersive.usda",
+    "Scene.usda"
+  ],
+  "recentIdentifiers" : {
+
+  },
+  "sceneCameraHistory" : {
+    "D66134B1-3681-4A8E-AFE5-29F257229F3B" : [
+      {
+        "date" : 797668716.473928,
+        "title" : "Untitled",
+        "transform" : [
+          0.99372756,
+          9.395312e-09,
+          0.11182858,
+          0,
+          0.06095605,
+          0.83838093,
+          -0.54166585,
+          0,
+          -0.093754955,
+          0.54508483,
+          0.8331222,
+          0,
+          -0.028413374,
+          0.16519341,
+          0.252486,
+          1
+        ]
+      }
+    ]
+  },
+  "sceneViewportBackgroundColors" : {
+
+  },
+  "selectedSceneRelativePath" : "Scene.usda"
+}

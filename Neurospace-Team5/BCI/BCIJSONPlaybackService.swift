@@ -48,7 +48,9 @@ final class BCIJSONPlaybackService {
 
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.playNext()
+            Task { @MainActor [weak self] in
+                self?.playNext()
+            }
         }
     }
 

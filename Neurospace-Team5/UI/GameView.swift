@@ -43,20 +43,22 @@ struct CongratsView: View {
 
             Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
                 Task { @MainActor in
-                    dismissWindow(id: appModel.congratsWindowID)
-                    dismissWindow(id: appModel.missionFailedWindowID)
-
                     if appModel.gameController.canAdvanceStage {
                         appModel.gameController.advanceStage()
+                        print("[Congrats] advanced to stage \(appModel.gameController.currentStage)")
 
                         if appModel.immersiveSpaceState == .open {
                             appModel.gameController.startSession()
+                            dismissWindow(id: appModel.congratsWindowID)
+                            dismissWindow(id: appModel.missionFailedWindowID)
                         } else {
                             appModel.immersiveSpaceState = .inTransition
                             switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                             case .opened:
                                 appModel.immersiveSpaceState = .open
                                 appModel.gameController.startSession()
+                                dismissWindow(id: appModel.congratsWindowID)
+                                dismissWindow(id: appModel.missionFailedWindowID)
 
                             case .userCancelled, .error:
                                 fallthrough
@@ -75,11 +77,13 @@ struct CongratsView: View {
                         }
 
                         openWindow(id: appModel.mainWindowID)
+                        dismissWindow(id: appModel.congratsWindowID)
+                        dismissWindow(id: appModel.missionFailedWindowID)
                     }
                 }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.purple)
+            .tint(DS.teal)
             .controlSize(.large)
         }
         .padding(40)
@@ -88,13 +92,6 @@ struct CongratsView: View {
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
             dismissWindow(id: appModel.congratsWindowID)
-        }
-
-        // Also make sure this window disappears if the game is no longer in finished state
-        .onChange(of: appModel.gameController.sessionState) { _, newState in
-            if newState != .finished {
-                dismissWindow(id: appModel.congratsWindowID)
-            }
         }
     }
 }
@@ -172,7 +169,7 @@ struct MissionFailedView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(DS.teal)
                 .controlSize(.large)
             }
         }
@@ -210,10 +207,10 @@ struct GameControlPanel: View {
 
     private var eegColor: Color {
         switch controller.connectionState {
-        case .connected:    return .green
-        case .connecting:   return .yellow
-        case .disconnected: return .orange
-        case .failed:       return .red
+        case .connected:    return DS.success
+        case .connecting:   return DS.warning
+        case .disconnected: return DS.gold
+        case .failed:       return DS.error
         }
     }
 
@@ -387,5 +384,41 @@ struct GameControlPanel: View {
         }
         .frame(width: 320)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+    }
+}
+
+// MARK: - Bubble Progress Bar (head-anchored, bottom of view)
+
+struct BubbleProgressBar: View {
+    @Environment(AppModel.self) private var appModel
+
+    private var controller: BubbleGameController { appModel.gameController }
+    private var isPlaying: Bool { controller.sessionState == .playing }
+
+    var body: some View {
+        if isPlaying {
+            VStack(spacing: 6) {
+                HStack(spacing: 0) {
+                    ForEach(0..<controller.totalBubbleCount, id: \.self) { i in
+                        Capsule()
+                            .fill(i < controller.poppedCount ? DS.teal : Color.white.opacity(0.25))
+                            .frame(height: 8)
+                            .animation(.easeInOut(duration: 0.25), value: controller.poppedCount)
+                        if i < controller.totalBubbleCount - 1 {
+                            Spacer().frame(width: 3)
+                        }
+                    }
+                }
+
+                Text("\(controller.poppedCount) / \(controller.totalBubbleCount)")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(width: 260)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .transition(.opacity)
+        }
     }
 }
