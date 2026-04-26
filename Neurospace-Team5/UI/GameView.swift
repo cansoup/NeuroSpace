@@ -87,8 +87,6 @@ struct CongratsView: View {
             .controlSize(.large)
         }
         .padding(40)
-
-        // IMPORTANT: close this window if the session is being force-ended
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
             dismissWindow(id: appModel.congratsWindowID)
@@ -174,14 +172,10 @@ struct MissionFailedView: View {
             }
         }
         .padding(40)
-
-        // IMPORTANT: close this window if the session is being force-ended
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
             dismissWindow(id: appModel.missionFailedWindowID)
         }
-
-        // Also make sure this window disappears if the game is no longer in finished state
         .onChange(of: appModel.gameController.sessionState) { _, newState in
             if newState != .finished {
                 dismissWindow(id: appModel.missionFailedWindowID)
@@ -195,6 +189,7 @@ struct MissionFailedView: View {
 struct GameControlPanel: View {
     @Environment(AppModel.self) private var appModel
     @State private var confirmingStop = false
+    @State private var showJSONTesting = true
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -203,7 +198,9 @@ struct GameControlPanel: View {
         return String(format: "%02d:%02d", t / 60, t % 60)
     }
 
-    private var isLowTime: Bool { controller.remainingSeconds <= 30 }
+    private var isLowTime: Bool {
+        controller.remainingSeconds <= 30
+    }
 
     private var eegColor: Color {
         switch controller.connectionState {
@@ -238,6 +235,7 @@ struct GameControlPanel: View {
 
                         Button("End Session") {
                             confirmingStop = false
+                            appModel.jsonPlayback.stopPlayback(resetMotionOnly: true)
                             appModel.shouldEndSession = true
                         }
                         .buttonStyle(.borderedProminent)
@@ -258,6 +256,17 @@ struct GameControlPanel: View {
                         .foregroundStyle(.secondary)
 
                     Spacer()
+
+                    Button {
+                        showJSONTesting.toggle()
+                    } label: {
+                        Image(systemName: showJSONTesting ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .frame(width: 26, height: 26)
+                            .background(DS.teal.opacity(0.45), in: RoundedRectangle(cornerRadius: 7))
+                    }
+                    .hoverEffect()
 
                     Button {
                         confirmingStop = true
@@ -306,9 +315,65 @@ struct GameControlPanel: View {
                     }
                 }
                 .padding(16)
+
+                if showJSONTesting {
+                    Divider().opacity(0.3)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("JSON ARM TEST")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1)
+
+                        Text(appModel.jsonPlayback.statusText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(DS.teal)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+
+                        HStack(spacing: 8) {
+                            Button("Load") {
+                                appModel.jsonPlayback.loadJSON(named: "bci_test_data")
+                            }
+                            .controlSize(.small)
+
+                            Button(appModel.jsonPlayback.isPlaying ? "Playing" : "Play") {
+                                appModel.jsonPlayback.startPlayback(interval: 0.35)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(appModel.jsonPlayback.isPlaying ? .green : DS.teal)
+                            .controlSize(.small)
+
+                            Button("Stop") {
+                                appModel.jsonPlayback.stopPlayback()
+                            }
+                            .controlSize(.small)
+                        }
+
+                        HStack(spacing: 8) {
+                            Text("Loaded: \(appModel.jsonPlayback.loadedCountText)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            Text("Arm: \(controller.activeArm.rawValue.capitalized)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text("Vector: \(controller.motionVectorText)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
+                }
             }
         }
-        .frame(width: 320)
+        .frame(width: 340)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
     }
 }
@@ -318,8 +383,13 @@ struct GameControlPanel: View {
 struct BubbleProgressBar: View {
     @Environment(AppModel.self) private var appModel
 
-    private var controller: BubbleGameController { appModel.gameController }
-    private var isPlaying: Bool { controller.sessionState == .playing }
+    private var controller: BubbleGameController {
+        appModel.gameController
+    }
+
+    private var isPlaying: Bool {
+        controller.sessionState == .playing
+    }
 
     var body: some View {
         if isPlaying {
@@ -330,6 +400,7 @@ struct BubbleProgressBar: View {
                             .fill(i < controller.poppedCount ? DS.teal : Color.white.opacity(0.25))
                             .frame(height: 8)
                             .animation(.easeInOut(duration: 0.25), value: controller.poppedCount)
+
                         if i < controller.totalBubbleCount - 1 {
                             Spacer().frame(width: 3)
                         }

@@ -135,16 +135,29 @@ struct LobbyView: View {
                         await dismissImmersiveSpace()
                         skyboxOpen = false
                     }
+
+                    if controller.sessionState == .finished || controller.sessionState == .idle {
+                        controller.resetGame()
+                    }
+
                     if appModel.immersiveSpaceState == .closed {
                         appModel.immersiveSpaceState = .inTransition
+
                         switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                         case .opened:
+                            appModel.immersiveSpaceState = .open
+                            controller.startSession()
                             dismissWindow(id: appModel.mainWindowID)
+
                         case .userCancelled, .error:
                             fallthrough
+
                         @unknown default:
                             appModel.immersiveSpaceState = .closed
                         }
+                    } else if appModel.immersiveSpaceState == .open {
+                        controller.startSession()
+                        dismissWindow(id: appModel.mainWindowID)
                     }
                 }
             }
@@ -331,8 +344,8 @@ struct LobbyView: View {
                         debugSmallButton("Load") {
                             appModel.jsonPlayback.loadJSON(named: "bci_test_data")
                         }
-                        debugActionButton("Play", isActive: false) {
-                            appModel.jsonPlayback.startPlayback(interval: 0.1)
+                        debugActionButton("Play", isActive: appModel.jsonPlayback.isPlaying) {
+                            appModel.jsonPlayback.startPlayback(interval: 0.35)
                         }
                         debugSmallButton("Stop") {
                             appModel.jsonPlayback.stopPlayback()

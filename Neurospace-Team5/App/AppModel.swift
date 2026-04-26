@@ -10,11 +10,13 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
+
+    let mainWindowID = "MainWindow"
+    let congratsWindowID = "CongratsWindow"
+    let missionFailedWindowID = "MissionFailedWindow"
+
     let immersiveSpaceID = "ImmersiveSpace"
     let lobbySkyboxID = "LobbySkybox"
-    let mainWindowID = "main"
-    let congratsWindowID = "congrats"
-    let missionFailedWindowID = "missionFailed"
 
     enum ImmersiveSpaceState {
         case closed
@@ -23,14 +25,12 @@ final class AppModel {
     }
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
-    var shouldEndSession: Bool = false
-    var gameController: BubbleGameController
+    var shouldEndSession = false
 
-    let jsonPlayback: BCIJSONPlaybackService
+    var gameController = BubbleGameController()
+    var jsonPlayback: JSONPlaybackManager!
 
     init() {
-        let controller = BubbleGameController()
-        self.gameController = controller
-        self.jsonPlayback = BCIJSONPlaybackService(controller: controller)
+        jsonPlayback = JSONPlaybackManager(controller: gameController)
     }
 }

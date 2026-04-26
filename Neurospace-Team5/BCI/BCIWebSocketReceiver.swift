@@ -31,33 +31,30 @@ final class BCIWebSocketClient {
     var lastConfidence: Double = 0
     var logLines: [String] = []
 
-    /// Assign this before starting a session so intent messages drive the arm.
-    /// Set from AppModel or BubbleGameController when the session begins.
     var armMapper: BCIArmMapper?
 
     private var socketTask: URLSessionWebSocketTask?
     private let session = URLSession(configuration: .default)
     private let decoder = JSONDecoder()
 
-    // Aligned with the Python bridge CONFIDENCE_THRESHOLD (0.65).
-    // BCIArmMapper applies its own secondary check at 0.55.
-    private let minimumConfidence = 0.65
-
-    // Movement magnitude applied per intent (matches bci_test_data.json scale)
+    private let minimumConfidence = 0.75
     private let moveMagnitude: Float = 0.9
 
     func connect(host: String, port: Int = 8765) {
         disconnect()
 
         let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+
         guard !trimmedHost.isEmpty else {
             state = .failed("Host is empty")
             return
         }
+
         guard (1...65535).contains(port) else {
             state = .failed("Port must be 1-65535")
             return
         }
+
         guard let url = URL(string: "ws://\(trimmedHost):\(port)") else {
             state = .failed("Bad WebSocket URL")
             return
@@ -81,6 +78,7 @@ final class BCIWebSocketClient {
             appendLog("Ping skipped: not connected")
             return
         }
+
         socketTask?.sendPing { [weak self] error in
             if let error {
                 self?.appendLog("Ping failed: \(error.localizedDescription)")
@@ -101,19 +99,23 @@ final class BCIWebSocketClient {
             do {
                 while let socketTask = self.socketTask {
                     let message = try await socketTask.receive()
+
                     if self.state == .connecting {
                         self.state = .connected
                         self.appendLog("Connected to \(socketTask.currentRequest?.url?.absoluteString ?? "unknown URL")")
                     }
+
                     switch message {
                     case .string(let text):
                         self.handle(text: text)
+
                     case .data(let data):
                         if let text = String(data: data, encoding: .utf8) {
                             self.handle(text: text)
                         } else {
                             self.appendLog("Received non-UTF8 data frame")
                         }
+
                     @unknown default:
                         self.appendLog("Received unknown frame")
                     }
@@ -127,30 +129,68 @@ final class BCIWebSocketClient {
 
     private func handle(text: String) {
         appendLog("RX: \(text)")
+
         guard let data = text.data(using: .utf8) else { return }
 
         do {
-            if let generic = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let type = generic["type"] as? String {
-                switch type {
-                case "intent":
-                    let message = try decoder.decode(IntentMessage.self, from: data)
-                    route(intent: message.intent, confidence: message.confidence)
-                case "status":
-                    let message = try decoder.decode(StatusMessage.self, from: data)
-                    appendLog("Status: \(message.state) - \(message.message)")
-                default:
-                    appendLog("Unhandled type: \(type)")
-                }
-            } else {
+            guard let generic = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let type = generic["type"] as? String else {
                 appendLog("Malformed JSON message")
+                return
+            }
+
+            switch type {
+            case "prediction":
+                let message = try decoder.decode(BCIPredictionMessage.self, from: data)
+                route(prediction: message)
+
+            case "intent":
+                let message = try decoder.decode(IntentMessage.self, from: data)
+                route(intent: message.intent, confidence: message.confidence)
+
+            case "status":
+                let message = try decoder.decode(StatusMessage.self, from: data)
+                appendLog("Status: \(message.state) - \(message.message)")
+
+            default:
+                appendLog("Unhandled type: \(type)")
             }
         } catch {
             appendLog("Decode failed: \(error.localizedDescription)")
         }
     }
 
-    // MARK: - Intent routing
+    private func route(prediction: BCIPredictionMessage) {
+        lastIntent = prediction.predictedClass.rawValue
+        lastConfidence = prediction.confidence
+
+        guard prediction.aboveThreshold else {
+            appendLog("Ignored \(prediction.predictedClass.rawValue): below threshold")
+            sendControlMessage(.idle, confidence: prediction.confidence)
+            return
+        }
+
+        guard prediction.confidence >= minimumConfidence else {
+            appendLog("Ignored \(prediction.predictedClass.rawValue): confidence \(String(format: "%.2f", prediction.confidence)) < \(minimumConfidence)")
+            sendControlMessage(.idle, confidence: prediction.confidence)
+            return
+        }
+
+        switch prediction.predictedClass {
+        case .left:
+            appendLog("Prediction LEFT → left arm")
+            sendPredictionControlMessage(activeArm: .left, confidence: prediction.confidence)
+
+        case .right:
+            appendLog("Prediction RIGHT → right arm")
+            sendPredictionControlMessage(activeArm: .right, confidence: prediction.confidence)
+
+        case .both:
+            appendLog("Prediction BOTH → both-arm intent")
+            sendPredictionControlMessage(activeArm: .left, confidence: prediction.confidence)
+            sendPredictionControlMessage(activeArm: .right, confidence: prediction.confidence)
+        }
+    }
 
     private func route(intent: String, confidence: Double) {
         lastIntent = intent
@@ -163,47 +203,41 @@ final class BCIWebSocketClient {
         }
 
         switch intent {
-
-        // ── EEGNet outputs (from Python bridge_server.py) ─────────────────
         case "moveLeft":
-            appendLog("Action: move LEFT arm (\(String(format: "%.2f", confidence)))")
+            appendLog("Action: move LEFT arm")
             sendControlMessage(.moveLeft, confidence: confidence)
 
         case "moveRight":
-            appendLog("Action: move RIGHT arm (\(String(format: "%.2f", confidence)))")
+            appendLog("Action: move RIGHT arm")
             sendControlMessage(.moveRight, confidence: confidence)
 
         case "moveUp":
-            appendLog("Action: move UP (\(String(format: "%.2f", confidence)))")
+            appendLog("Action: move UP")
             sendControlMessage(.moveUp, confidence: confidence)
 
         case "moveDown":
-            appendLog("Action: move DOWN (\(String(format: "%.2f", confidence)))")
+            appendLog("Action: move DOWN")
             sendControlMessage(.moveDown, confidence: confidence)
 
         case "moveForward":
-            appendLog("Action: move FORWARD (\(String(format: "%.2f", confidence)))")
+            appendLog("Action: move FORWARD")
             sendControlMessage(.moveForward, confidence: confidence)
 
         case "moveBackward":
-            appendLog("Action: move BACKWARD (\(String(format: "%.2f", confidence)))")
+            appendLog("Action: move BACKWARD")
             sendControlMessage(.moveBackward, confidence: confidence)
 
         case "idle":
-            appendLog("Action: idle — stopping motion")
+            appendLog("Action: idle")
             sendControlMessage(.idle, confidence: confidence)
 
-        // ── Legacy mock intents (kept for debug/fallback) ─────────────────
         case "focus_left":
-            appendLog("Action: focus_left (legacy) → moveLeft")
             sendControlMessage(.moveLeft, confidence: confidence)
 
         case "focus_right":
-            appendLog("Action: focus_right (legacy) → moveRight")
             sendControlMessage(.moveRight, confidence: confidence)
 
         case "confirm":
-            appendLog("Action: confirm (legacy) → idle")
             sendControlMessage(.idle, confidence: confidence)
 
         default:
@@ -211,10 +245,23 @@ final class BCIWebSocketClient {
         }
     }
 
-    // MARK: - BCIArmMapper bridge
+    private func sendPredictionControlMessage(activeArm: ActiveArm, confidence: Double) {
+        let x: Float = activeArm == .left ? -moveMagnitude : moveMagnitude
 
-    /// Translates a semantic intent into a BCIControlMessage and forwards it
-    /// to BCIArmMapper, which drives BubbleGameController.
+        let message = BCIControlMessage(
+            timestamp: Date().timeIntervalSince1970,
+            activeArm: activeArm,
+            moveX: x,
+            moveY: 0,
+            moveZ: -0.25,
+            confidence: Float(confidence)
+        )
+
+        Task { @MainActor in
+            self.armMapper?.handleControlMessage(message)
+        }
+    }
+
     private func sendControlMessage(_ intent: BCIIntent, confidence: Double) {
         let (activeArm, x, y, z): (ActiveArm, Float, Float, Float) = {
             switch intent {
@@ -237,7 +284,6 @@ final class BCIWebSocketClient {
             confidence: Float(confidence)
         )
 
-        // BCIArmMapper is @MainActor — dispatch to main thread
         Task { @MainActor in
             self.armMapper?.handleControlMessage(message)
         }
@@ -245,9 +291,11 @@ final class BCIWebSocketClient {
 
     private func appendLog(_ line: String) {
         logLines.append(line)
+
         if logLines.count > 50 {
             logLines.removeFirst(logLines.count - 50)
         }
+
         print(line)
     }
 }
