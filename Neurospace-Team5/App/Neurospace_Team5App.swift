@@ -17,6 +17,7 @@ struct Neurospace_Team5App: App {
             ContentView()
                 .environment(appModel)
         }
+        .windowStyle(.plain)
 
         WindowGroup(id: appModel.congratsWindowID) {
             CongratsView()
