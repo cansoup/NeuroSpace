@@ -173,18 +173,20 @@ struct LobbyView: View {
 
             Spacer(minLength: 4)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Last Session")
-                    .font(DS.fontBody)
-                    .foregroundStyle(DS.textSecondary)
+            if let last = appModel.sessionStore.lastSession {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Last Session")
+                        .font(DS.fontBody)
+                        .foregroundStyle(DS.textSecondary)
 
-                Text("Stage 3/5  ·  240 pts  ·  4:12")
-                    .font(DS.fontData)
-                    .foregroundStyle(DS.teal)
+                    Text("Stage \(last.stageReached)/\(last.totalStages)  ·  \(last.score) pts  ·  \(last.formattedDuration)")
+                        .font(DS.fontData)
+                        .foregroundStyle(DS.teal)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassCard(radius: DS.radiusMd, border: DS.teal.opacity(0.15))
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(radius: DS.radiusMd, border: DS.teal.opacity(0.15))
         }
         .padding(20)
         .tealGlassCard()
@@ -235,12 +237,13 @@ struct LobbyView: View {
     // MARK: - Right Column: Stats
 
     private var todaysGoalPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel(text: "Today's Goal", color: DS.teal)
+        let store = appModel.sessionStore
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionLabel(text: "Today's Progress", color: DS.teal)
 
-            goalRow(label: "Reach", value: "3", unit: "sessions")
-            goalRow(label: "Duration", value: "15", unit: "min")
-            goalRow(label: "Score", value: "500", unit: "pts")
+            goalRow(label: "Sessions", value: "\(store.todayCount)", unit: "done")
+            goalRow(label: "Duration", value: "\(store.todayTotalSeconds / 60)", unit: "min")
+            goalRow(label: "Score", value: "\(store.todayTotalScore)", unit: "pts")
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -266,7 +269,7 @@ struct LobbyView: View {
 
     private var weeklyStreakPanel: some View {
         let days = ["M", "T", "W", "T", "F", "S", "S"]
-        let filled = [true, true, true, true, false, false, false]
+        let filled = appModel.sessionStore.weeklyDays
 
         return VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Weekly Streak", color: DS.teal)

@@ -68,6 +68,7 @@ struct CongratsView: View {
                             }
                         }
                     } else {
+                        appModel.saveSessionRecord()
                         appModel.gameController.resetGame()
 
                         if appModel.immersiveSpaceState == .open {
@@ -127,6 +128,7 @@ struct MissionFailedView: View {
                         dismissWindow(id: appModel.missionFailedWindowID)
                         dismissWindow(id: appModel.congratsWindowID)
 
+                        appModel.saveSessionRecord()
                         appModel.gameController.resetGame()
 
                         if appModel.immersiveSpaceState == .open {
