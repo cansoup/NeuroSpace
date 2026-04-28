@@ -19,6 +19,7 @@ struct LobbyView: View {
 
     @State private var skyboxOpen = false
     @State private var showDebug = false
+    @State private var bridgeHost = ""
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -339,6 +340,38 @@ struct LobbyView: View {
                     }
                 }
 
+                debugSection("Bridge Server") {
+                    let client = appModel.bciClient
+                    HStack(spacing: 6) {
+                        TextField("IP (e.g. 192.168.1.42)", text: $bridgeHost)
+                            .textFieldStyle(.roundedBorder)
+                            .font(DS.fontSmall)
+
+                        if case .connected = client.state {
+                            debugSmallButton("Disconnect") {
+                                client.disconnect()
+                            }
+                        } else {
+                            debugSmallButton("Connect") {
+                                client.connect(host: bridgeHost)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(bridgeStatusColor)
+                            .frame(width: 6, height: 6)
+                        Text(bridgeStatusText)
+                            .font(DS.fontSmall)
+                            .foregroundStyle(DS.textSecondary)
+                    }
+
+                    if !client.lastIntent.isEmpty && client.lastIntent != "-" {
+                        debugRow("Last", "\(client.lastIntent) (\(String(format: "%.0f%%", client.lastConfidence * 100)))")
+                    }
+                }
+
                 debugSection("JSON Playback") {
                     HStack(spacing: 6) {
                         debugSmallButton("Load") {
@@ -364,6 +397,24 @@ struct LobbyView: View {
             .padding(18)
         }
         .tealGlassCard()
+    }
+
+    private var bridgeStatusText: String {
+        switch appModel.bciClient.state {
+        case .disconnected: return "Disconnected"
+        case .connecting:   return "Connecting..."
+        case .connected:    return "Connected"
+        case .failed(let e): return "Failed: \(e)"
+        }
+    }
+
+    private var bridgeStatusColor: Color {
+        switch appModel.bciClient.state {
+        case .connected:    return DS.success
+        case .connecting:   return DS.warning
+        case .disconnected: return DS.textTertiary
+        case .failed:       return DS.error
+        }
     }
 
     private var debugHeader: some View {

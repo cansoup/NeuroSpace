@@ -32,6 +32,7 @@ final class BCIWebSocketClient {
     var logLines: [String] = []
 
     var armMapper: BCIArmMapper?
+    var gameController: BubbleGameController?
 
     private var socketTask: URLSessionWebSocketTask?
     private let session = URLSession(configuration: .default)
@@ -166,29 +167,41 @@ final class BCIWebSocketClient {
 
         guard prediction.aboveThreshold else {
             appendLog("Ignored \(prediction.predictedClass.rawValue): below threshold")
+            routeToGameController(prediction)
             sendControlMessage(.idle, confidence: prediction.confidence)
             return
         }
 
         guard prediction.confidence >= minimumConfidence else {
             appendLog("Ignored \(prediction.predictedClass.rawValue): confidence \(String(format: "%.2f", prediction.confidence)) < \(minimumConfidence)")
+            routeToGameController(prediction)
             sendControlMessage(.idle, confidence: prediction.confidence)
             return
         }
 
+        appendLog("Prediction \(prediction.predictedClass.rawValue.uppercased())")
+        routeToGameController(prediction)
+
         switch prediction.predictedClass {
         case .left:
-            appendLog("Prediction LEFT → left arm")
             sendPredictionControlMessage(activeArm: .left, confidence: prediction.confidence)
 
         case .right:
-            appendLog("Prediction RIGHT → right arm")
             sendPredictionControlMessage(activeArm: .right, confidence: prediction.confidence)
 
         case .both:
-            appendLog("Prediction BOTH → both-arm intent")
             sendPredictionControlMessage(activeArm: .left, confidence: prediction.confidence)
             sendPredictionControlMessage(activeArm: .right, confidence: prediction.confidence)
+        }
+    }
+
+    private func routeToGameController(_ prediction: BCIPredictionMessage) {
+        Task { @MainActor in
+            guard let controller = self.gameController,
+                  controller.sessionState == .playing,
+                  prediction.aboveThreshold,
+                  prediction.confidence >= self.minimumConfidence else { return }
+            controller.applyPredictionClass(prediction.predictedClass)
         }
     }
 

@@ -29,8 +29,10 @@ final class AppModel {
 
     var gameController = BubbleGameController()
     var jsonPlayback: JSONPlaybackManager!
+    var bciClient = BCIWebSocketClient()
 
     init() {
         jsonPlayback = JSONPlaybackManager(controller: gameController)
+        bciClient.gameController = gameController
     }
 }
