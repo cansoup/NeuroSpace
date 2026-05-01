@@ -31,7 +31,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				Untitled.swift,
 			);
 			target = 57998A052F67A23100C7005F /* Neurospace-Team5 */;
 		};

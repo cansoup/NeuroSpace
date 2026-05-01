@@ -2,16 +2,35 @@ import SwiftUI
 
 private let accentTeal = DS.teal
 
+enum LobbyScreen {
+    case lobby
+    case progress
+}
+
 struct ContentView: View {
     @Environment(AppModel.self) private var appModel
+    @State private var screen: LobbyScreen = .lobby
 
     var body: some View {
-        LobbyView()
-            .frame(width: 1100, height: 560)
+        Group {
+            switch screen {
+            case .lobby:
+                LobbyView(screen: $screen)
+            case .progress:
+                MyProgressView(onBack: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        screen = .lobby
+                    }
+                })
+            }
+        }
+        .frame(width: 1100, height: 560)
     }
 }
 
 struct LobbyView: View {
+    @Binding var screen: LobbyScreen
+
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
@@ -163,8 +182,11 @@ struct LobbyView: View {
             }
             .disabled(controller.sessionState == .playing || appModel.immersiveSpaceState == .inTransition)
 
-            menuButton(icon: "books.vertical", label: "Training Library") {}
-            menuButton(icon: "chart.line.uptrend.xyaxis", label: "My Progress") {}
+            menuButton(icon: "chart.line.uptrend.xyaxis", label: "My Progress") {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    screen = .progress
+                }
+            }
             menuButton(icon: "gearshape", label: "Settings") {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     showDebug.toggle()
@@ -357,6 +379,13 @@ struct LobbyView: View {
                     HStack(spacing: 6) {
                         Button("Reset Game") {
                             controller.resetGame()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red.opacity(0.7))
+                        .controlSize(.small)
+
+                        Button("Clear History") {
+                            appModel.sessionStore.clearAll()
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.red.opacity(0.7))

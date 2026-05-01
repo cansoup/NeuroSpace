@@ -68,6 +68,9 @@ struct CongratsView: View {
                             }
                         }
                     } else {
+                        dismissWindow(id: appModel.congratsWindowID)
+                        dismissWindow(id: appModel.missionFailedWindowID)
+
                         appModel.saveSessionRecord()
                         appModel.gameController.resetGame()
 
@@ -78,8 +81,6 @@ struct CongratsView: View {
                         }
 
                         openWindow(id: appModel.mainWindowID)
-                        dismissWindow(id: appModel.congratsWindowID)
-                        dismissWindow(id: appModel.missionFailedWindowID)
                     }
                 }
             }
