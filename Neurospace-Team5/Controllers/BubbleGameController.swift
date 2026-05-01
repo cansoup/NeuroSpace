@@ -155,6 +155,18 @@ final class BubbleGameController {
         currentStage >= StageConfig.totalStages
     }
 
+    var meetsUnlockCriteria: Bool {
+        let criteria = stageConfig.unlockCriteria
+        return popCount >= criteria.requiredPops && accuracy >= criteria.minimumAccuracy
+    }
+
+    var unlockProgressText: String {
+        let c = stageConfig.unlockCriteria
+        let acc = Int((accuracy * 100).rounded())
+        let req = Int((c.minimumAccuracy * 100).rounded())
+        return "Accuracy \(acc)% / \(req)%   ·   Pops \(popCount)/\(c.requiredPops)"
+    }
+
     func advanceStage() {
         guard canAdvanceStage else { return }
 
@@ -231,7 +243,7 @@ final class BubbleGameController {
             return
         }
 
-        if let assigned = target.assignedArm, assigned != activeArm {
+        if !target.canBePopped(by: activeArm) {
             stopMotion()
             return
         }
@@ -394,8 +406,7 @@ final class BubbleGameController {
         guard let idx = bubbles.firstIndex(where: { $0.id == id }),
               !bubbles[idx].isGone else { return }
 
-        if let assigned = bubbles[idx].assignedArm,
-           assigned != activeArm {
+        if !bubbles[idx].canBePopped(by: activeArm) {
             return
         }
 
@@ -462,11 +473,7 @@ final class BubbleGameController {
         var minDist: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-            if let assigned = bubble.assignedArm,
-               assigned != arm {
-                continue
-            }
-
+            guard bubble.canBePopped(by: arm) else { continue }
             minDist = min(minDist, simd_distance(bubble.position, tip))
         }
 
@@ -478,10 +485,7 @@ final class BubbleGameController {
         var minDist: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-            if let assigned = bubble.assignedArm,
-               assigned != activeArm {
-                continue
-            }
+            guard bubble.canBePopped(by: activeArm) else { continue }
 
             let d = simd_distance(bubble.position, currentArmState.tipPosition)
             if d < minDist {
@@ -510,10 +514,7 @@ final class BubbleGameController {
         var bestScore: Float = -.greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-            if let assigned = bubble.assignedArm,
-               assigned != activeArm {
-                continue
-            }
+            guard bubble.canBePopped(by: activeArm) else { continue }
 
             let toBubble = bubble.position - tip
             let distance = simd_length(toBubble)
@@ -631,8 +632,18 @@ final class BubbleGameController {
         }
 
         return positions.map { position in
-            let arm: ActiveArm? = position.x < 0 ? .left : .right
-            let type: BubbleType = arm == .left ? .blue : .red
+            let assignedArm: ActiveArm?
+            let type: BubbleType
+
+            switch config.armMode {
+            case .bilateral:
+                let arm: ActiveArm = position.x < 0 ? .left : .right
+                assignedArm = arm
+                type = arm == .left ? .blue : .red
+            case .singleActive:
+                assignedArm = nil
+                type = BubbleType.randomWeighted()
+            }
 
             let speed = Float.random(in: config.bubbleSpeed)
 
@@ -649,7 +660,7 @@ final class BubbleGameController {
             return Bubble(
                 position: position,
                 type: type,
-                assignedArm: arm,
+                assignedArm: assignedArm,
                 velocity: velocity,
                 lifetime: config.bubbleLifetime
             )

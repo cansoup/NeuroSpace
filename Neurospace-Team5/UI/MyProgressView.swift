@@ -32,11 +32,9 @@ private struct StageBreakdownRow: Identifiable {
 private struct BubbleBreakdown {
     let red: Int
     let blue: Int
-    let green: Int
-    let gold: Int
 
-    var max: Int { Swift.max(red, Swift.max(blue, Swift.max(green, gold))) }
-    var total: Int { red + blue + green + gold }
+    var max: Int { Swift.max(red, blue) }
+    var total: Int { red + blue }
 }
 
 private enum ProgressData {
@@ -62,10 +60,8 @@ private enum ProgressData {
 
         let totalBubbles = max(0, record.score / 40)
         let breakdown = BubbleBreakdown(
-            red:   Int(Double(totalBubbles) * 0.25),
-            blue:  Int(Double(totalBubbles) * 0.36),
-            green: Int(Double(totalBubbles) * 0.27),
-            gold:  Int(Double(totalBubbles) * 0.12)
+            red:  Int(Double(totalBubbles) * 0.5),
+            blue: Int(Double(totalBubbles) * 0.5)
         )
 
         return ProgressSession(
@@ -752,8 +748,6 @@ private struct SessionDetailPanel: View {
             VStack(spacing: 10) {
                 BubbleBar(label: "Red", count: session.breakdown.red, max: session.breakdown.max, color: DS.bubbleRed)
                 BubbleBar(label: "Blue", count: session.breakdown.blue, max: session.breakdown.max, color: DS.bubbleBlue)
-                BubbleBar(label: "Green", count: session.breakdown.green, max: session.breakdown.max, color: DS.bubbleGreen)
-                BubbleBar(label: "Gold", count: session.breakdown.gold, max: session.breakdown.max, color: DS.bubbleGold)
             }
         }
         .padding(.horizontal, 20)
