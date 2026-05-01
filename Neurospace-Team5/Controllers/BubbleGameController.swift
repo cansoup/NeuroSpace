@@ -592,16 +592,19 @@ final class BubbleGameController {
         let yRange: ClosedRange<Float> = config.allowedAxes.contains(.y) ? -0.08 ... 0.30 : 0.08 ... 0.12
         let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.26 ... 0.14 : -0.06 ... 0.06
 
-        let minDistance = config.bubbleRadius * 3.2
+        let minDistance = config.bubbleRadius * 2.0
 
         let rightTipStart = SIMD3<Float>(0.16, 0.02, 0.00)
         let leftTipStart  = SIMD3<Float>(-0.16, 0.02, 0.00)
-        let safeRadius = max(config.bubbleRadius + 0.028, 0.06) + 0.10
+        let safeRadius = config.bubbleRadius + 0.025
+
+        let centerExclusionX: Float = max(0.06, config.bubbleRadius * 0.6)
+        let centerExclusionZ: Float = max(0.05, config.bubbleRadius * 0.5)
 
         var positions: [SIMD3<Float>] = []
         var tries = 0
 
-        while positions.count < config.bubbleCount && tries < 500 {
+        while positions.count < config.bubbleCount && tries < 800 {
             tries += 1
 
             let candidate = SIMD3<Float>(
@@ -610,10 +613,13 @@ final class BubbleGameController {
                 Float.random(in: zRange)
             )
 
+            // Only exclude the upper-center area (around the player's face),
+            // not the entire mid-body column. Stage 1's bubbles sit at y ≈ 0.10
+            // (below the face), so they should be allowed at center x.
             let tooCloseToCenter =
-                abs(candidate.x) < 0.10 &&
-                candidate.y > -0.02 && candidate.y < 0.18 &&
-                abs(candidate.z) < 0.08
+                abs(candidate.x) < centerExclusionX &&
+                candidate.y > 0.18 &&
+                abs(candidate.z) < centerExclusionZ
 
             if tooCloseToCenter {
                 continue
