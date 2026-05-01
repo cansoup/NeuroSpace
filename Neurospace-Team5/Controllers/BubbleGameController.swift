@@ -601,10 +601,17 @@ final class BubbleGameController {
         let centerExclusionX: Float = max(0.06, config.bubbleRadius * 0.6)
         let centerExclusionZ: Float = max(0.05, config.bubbleRadius * 0.5)
 
+        // Stage info / control panel keep-out box. Mirrors the panel's runtime
+        // position in ImmersiveView (panel.position = (0.34, 0.18, 0.02))
+        // with a half-extent generous enough to cover the panel even when its
+        // debug section is expanded.
+        let panelCenter = SIMD3<Float>(0.34, 0.18, 0.02)
+        let panelHalfExtent = SIMD3<Float>(0.18, 0.13, 0.06)
+
         var positions: [SIMD3<Float>] = []
         var tries = 0
 
-        while positions.count < config.bubbleCount && tries < 800 {
+        while positions.count < config.bubbleCount && tries < 1200 {
             tries += 1
 
             let candidate = SIMD3<Float>(
@@ -622,6 +629,17 @@ final class BubbleGameController {
                 abs(candidate.z) < centerExclusionZ
 
             if tooCloseToCenter {
+                continue
+            }
+
+            // Reject any candidate whose bubble (with its own radius) would
+            // visually overlap the stage-info panel keep-out box.
+            let dx = abs(candidate.x - panelCenter.x)
+            let dy = abs(candidate.y - panelCenter.y)
+            let dz = abs(candidate.z - panelCenter.z)
+            if dx < panelHalfExtent.x + config.bubbleRadius &&
+               dy < panelHalfExtent.y + config.bubbleRadius &&
+               dz < panelHalfExtent.z + config.bubbleRadius {
                 continue
             }
 

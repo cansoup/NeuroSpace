@@ -259,7 +259,6 @@ struct MissionFailedView: View {
 struct GameControlPanel: View {
     @Environment(AppModel.self) private var appModel
     @State private var confirmingStop = false
-    @State private var showJSONTesting = true
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -328,17 +327,6 @@ struct GameControlPanel: View {
                     Spacer()
 
                     Button {
-                        showJSONTesting.toggle()
-                    } label: {
-                        Image(systemName: showJSONTesting ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .frame(width: 26, height: 26)
-                            .background(DS.teal.opacity(0.45), in: RoundedRectangle(cornerRadius: 7))
-                    }
-                    .hoverEffect()
-
-                    Button {
                         confirmingStop = true
                     } label: {
                         Image(systemName: "xmark")
@@ -386,7 +374,7 @@ struct GameControlPanel: View {
                 }
                 .padding(16)
 
-                if showJSONTesting {
+                if appModel.debugMode {
                     Divider().opacity(0.3)
 
                     VStack(alignment: .leading, spacing: 8) {

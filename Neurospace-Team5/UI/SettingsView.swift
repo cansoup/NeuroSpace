@@ -44,16 +44,11 @@ private final class SettingsState {
     var autoSave: Bool = true
     var lang: String = "en"
 
-    // Debug
-    var debugMode: Bool = false
-    var showFPS: Bool = false
-    var showCollision: Bool = false
-    var showMotion: Bool = false
+    // Debug (note: debugMode lives on AppModel so it can be observed across views)
     var autoPlayJson: Bool = false
     var loopJson: Bool = false
 
-    // Immersive
-    var environment: String = "space"
+    // Immersive (note: `environment` lives on AppModel)
     var envBrightness: Double = 65
     var depthEffect: Bool = true
     var passthroughBlend: Double = 30
@@ -499,19 +494,11 @@ private struct DebugPanel: View {
     private var controller: BubbleGameController { appModel.gameController }
 
     var body: some View {
+        @Bindable var appModel = appModel
         VStack(spacing: 12) {
             SectionCard(title: "Debug Mode") {
-                SettingRowView(icon: "⬡", label: "Enable Debug Mode", desc: "Show arm coordinates, EEG signal, collision data") {
-                    ToggleSwitch(value: $s.debugMode)
-                }
-                SettingRowView(icon: "◈", label: "Show FPS Counter", desc: "Display frame rate overlay") {
-                    ToggleSwitch(value: $s.showFPS)
-                }
-                SettingRowView(icon: "⊹", label: "Show Collision Bounds", desc: "Visualize bubble hit regions") {
-                    ToggleSwitch(value: $s.showCollision)
-                }
-                SettingRowView(icon: "✦", label: "Show Motion Vector", desc: "Real-time arm velocity visualization", divider: false) {
-                    ToggleSwitch(value: $s.showMotion)
+                SettingRowView(icon: "⬡", label: "Enable Debug Mode", desc: "Show arm coordinates, EEG signal, collision data", divider: false) {
+                    ToggleSwitch(value: $appModel.debugMode)
                 }
             }
 
@@ -524,7 +511,7 @@ private struct DebugPanel: View {
                 }
             }
 
-            if s.debugMode {
+            if appModel.debugMode {
                 liveDebugOutput
             }
         }
@@ -664,22 +651,7 @@ private struct DebugPanel: View {
 
 private struct ImmersivePanel: View {
     @Bindable var s: SettingsState
-
-    private struct Env: Identifiable, Hashable {
-        let id: String
-        let label: String
-        let colors: [Color]
-        let icon: String
-    }
-
-    private let environments: [Env] = [
-        Env(id: "space",   label: "Deep Space",    colors: [Color(hex: 0x060a12), Color(hex: 0x0d1a2e)], icon: "✦"),
-        Env(id: "forest",  label: "Forest",        colors: [Color(hex: 0x0a1a0a), Color(hex: 0x0d2010)], icon: "⬡"),
-        Env(id: "ocean",   label: "Ocean Depths",  colors: [Color(hex: 0x060e1a), Color(hex: 0x0a1428)], icon: "◎"),
-        Env(id: "aurora",  label: "Aurora",        colors: [Color(hex: 0x0a0820), Color(hex: 0x1a0a2e)], icon: "◈"),
-        Env(id: "desert",  label: "Desert Dusk",   colors: [Color(hex: 0x1a0e06), Color(hex: 0x2a1a08)], icon: "◇"),
-        Env(id: "none",    label: "Passthrough",   colors: [Color(hex: 0x1a1a1a), Color(hex: 0x2a2a2a)], icon: "⊹")
-    ]
+    @Environment(AppModel.self) private var appModel
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -697,7 +669,7 @@ private struct ImmersivePanel: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(environments) { env in
+                    ForEach(EnvironmentChoice.allCases) { env in
                         envCard(env)
                     }
                 }
@@ -734,16 +706,19 @@ private struct ImmersivePanel: View {
         }
     }
 
-    private func envCard(_ env: Env) -> some View {
-        let selected = s.environment == env.id
+    private func envCard(_ env: EnvironmentChoice) -> some View {
+        let selected = appModel.selectedEnvironment == env
+        let (c1, c2) = env.swatchHex
 
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) { s.environment = env.id }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                appModel.selectedEnvironment = env
+            }
         } label: {
             VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     LinearGradient(
-                        colors: env.colors,
+                        colors: [Color(hex: c1), Color(hex: c2)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

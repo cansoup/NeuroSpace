@@ -33,6 +33,7 @@ struct Neurospace_Team5App: App {
 
         ImmersiveSpace(id: appModel.lobbySkyboxID) {
             LobbySkyboxView()
+                .environment(appModel)
         }
         .immersionStyle(selection: .constant(.full), in: .full)
 
