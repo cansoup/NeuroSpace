@@ -5,6 +5,7 @@ private let accentTeal = DS.teal
 enum LobbyScreen {
     case lobby
     case progress
+    case settings
 }
 
 struct ContentView: View {
@@ -17,14 +18,18 @@ struct ContentView: View {
             case .lobby:
                 LobbyView(screen: $screen)
             case .progress:
-                MyProgressView(onBack: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        screen = .lobby
-                    }
-                })
+                MyProgressView(onBack: backToLobby)
+            case .settings:
+                SettingsView(onBack: backToLobby)
             }
         }
         .frame(width: 1100, height: 560)
+    }
+
+    private func backToLobby() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            screen = .lobby
+        }
     }
 }
 
@@ -37,7 +42,6 @@ struct LobbyView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var skyboxOpen = false
-    @State private var showDebug = false
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -54,12 +58,6 @@ struct LobbyView: View {
                 weeklyStreakPanel
             }
             .frame(width: 240)
-
-            if showDebug {
-                debugPanel
-                    .frame(width: 300)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -189,7 +187,7 @@ struct LobbyView: View {
             }
             menuButton(icon: "gearshape", label: "Settings") {
                 withAnimation(.easeInOut(duration: 0.25)) {
-                    showDebug.toggle()
+                    screen = .settings
                 }
             }
 
@@ -316,141 +314,6 @@ struct LobbyView: View {
         .tealGlassCard()
     }
 
-    // MARK: - Debug Panel
-
-    private var debugPanel: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                debugHeader
-
-                debugSection("Arm Debug") {
-                    debugRow("Left Tip", controller.leftTipText)
-                    debugRow("Right Tip", controller.rightTipText)
-                    debugRow("Motion Vector", controller.motionVectorText)
-                    debugRow("Active Bubble", controller.activeBubbleText)
-                }
-
-                debugSection("Session") {
-                    debugRow("State", controller.sessionState.rawValue.capitalized)
-                    debugRow("Intent", controller.currentIntent.rawValue)
-                    debugRow("Active Arm", controller.activeArm.rawValue.capitalized)
-                    debugRow("Score", "\(controller.score)")
-                    debugRow("Stage", "\(controller.currentStage)/\(StageConfig.totalStages)")
-                    debugRow("EEG", controller.connectionState.displayText)
-                }
-
-                debugSection("Arm Selection") {
-                    HStack(spacing: 8) {
-                        debugActionButton("Left Arm", isActive: controller.activeArm == .left) {
-                            controller.setActiveArm(.left)
-                        }
-                        debugActionButton("Right Arm", isActive: controller.activeArm == .right) {
-                            controller.setActiveArm(.right)
-                        }
-                    }
-                }
-
-                debugSection("Movement") {
-                    HStack(spacing: 6) {
-                        debugSmallButton("←") { controller.applyIntent(.moveLeft) }
-                        debugSmallButton("→") { controller.applyIntent(.moveRight) }
-                        debugSmallButton("↑") { controller.applyIntent(.moveUp) }
-                        debugSmallButton("↓") { controller.applyIntent(.moveDown) }
-                    }
-                    HStack(spacing: 6) {
-                        debugSmallButton("Fwd") { controller.applyIntent(.moveForward) }
-                        debugSmallButton("Bwd") { controller.applyIntent(.moveBackward) }
-                        debugSmallButton("Idle") { controller.applyIntent(.idle) }
-                    }
-                }
-
-                debugSection("JSON Playback") {
-                    HStack(spacing: 6) {
-                        debugSmallButton("Load") {
-                            appModel.jsonPlayback.loadJSON(named: "bci_test_data")
-                        }
-                        debugActionButton("Play", isActive: appModel.jsonPlayback.isPlaying) {
-                            appModel.jsonPlayback.startPlayback(interval: 0.35)
-                        }
-                        debugSmallButton("Stop") {
-                            appModel.jsonPlayback.stopPlayback()
-                        }
-                    }
-                    HStack(spacing: 6) {
-                        Button("Reset Game") {
-                            controller.resetGame()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red.opacity(0.7))
-                        .controlSize(.small)
-
-                        Button("Clear History") {
-                            appModel.sessionStore.clearAll()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red.opacity(0.7))
-                        .controlSize(.small)
-                    }
-                }
-            }
-            .padding(18)
-        }
-        .tealGlassCard()
-    }
-
-    private var debugHeader: some View {
-        HStack {
-            SectionLabel(text: "Debug", color: DS.teal)
-
-            Spacer()
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showDebug = false
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func debugSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: title, color: DS.textTertiary)
-
-            content()
-        }
-    }
-
-    private func debugRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(DS.fontSmall)
-                .foregroundStyle(DS.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.fontSmall)
-                .foregroundStyle(DS.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-    }
-
-    private func debugActionButton(_ title: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.borderedProminent)
-            .tint(isActive ? accentTeal : .gray.opacity(0.5))
-            .controlSize(.small)
-    }
-
-    private func debugSmallButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-    }
 }
 
 // MARK: - Neuro Logo Mark
