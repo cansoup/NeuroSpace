@@ -17,8 +17,6 @@ enum DS {
     // Bubble Points
     static let bubbleRed   = Color(hex: 0xFF6B6B)
     static let bubbleBlue  = Color(hex: 0x5B9BFF)
-    static let bubbleGreen = Color(hex: 0x4CC98A)
-    static let bubbleGold  = Color(hex: 0xFFD166)
 
     // Status
     static let success = Color(hex: 0x4CC98A)

@@ -26,11 +26,27 @@ final class AppModel {
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
     var shouldEndSession = false
+    var debugMode: Bool = false
+    var selectedEnvironment: EnvironmentChoice = .deepSpace
 
     var gameController = BubbleGameController()
     var jsonPlayback: JSONPlaybackManager!
+    var sessionStore = SessionStore()
 
     init() {
         jsonPlayback = JSONPlaybackManager(controller: gameController)
+    }
+
+    func saveSessionRecord() {
+        let controller = gameController
+        let totalStages = StageConfig.totalStages
+        let elapsed = controller.stageConfig.duration - controller.remainingSeconds
+        let record = SessionRecord(
+            stageReached: controller.currentStage,
+            totalStages: totalStages,
+            score: controller.score,
+            durationSeconds: elapsed
+        )
+        sessionStore.save(record)
     }
 }

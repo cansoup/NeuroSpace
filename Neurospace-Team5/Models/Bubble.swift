@@ -15,15 +15,11 @@ import UIKit
 enum BubbleType: String, CaseIterable, Codable {
     case red
     case blue
-    case green
-    case gold
 
     var points: Int {
         switch self {
         case .red:   return 10
         case .blue:  return 20
-        case .green: return 30
-        case .gold:  return 50
         }
     }
 
@@ -31,8 +27,6 @@ enum BubbleType: String, CaseIterable, Codable {
         switch self {
         case .red:   return "Red"
         case .blue:  return "Blue"
-        case .green: return "Green"
-        case .gold:  return "Gold"
         }
     }
 
@@ -40,24 +34,11 @@ enum BubbleType: String, CaseIterable, Codable {
         switch self {
         case .red:   return UIColor(red: 1.0, green: 0.42, blue: 0.42, alpha: 1.0)
         case .blue:  return UIColor(red: 0.36, green: 0.61, blue: 1.0, alpha: 1.0)
-        case .green: return UIColor(red: 0.30, green: 0.79, blue: 0.54, alpha: 1.0)
-        case .gold:  return UIColor(red: 1.0, green: 0.82, blue: 0.40, alpha: 1.0)
         }
     }
 
     static func randomWeighted() -> BubbleType {
-        let roll = Int.random(in: 1...100)
-
-        switch roll {
-        case 1...40:
-            return .red
-        case 41...70:
-            return .blue
-        case 71...90:
-            return .green
-        default:
-            return .gold
-        }
+        Bool.random() ? .red : .blue
     }
 }
 
@@ -103,6 +84,14 @@ struct Bubble: Identifiable, Equatable {
 
     /// True when the bubble should no longer be rendered or interacted with.
     var isGone: Bool { isPopped || isExpired }
+
+    /// Whether the given arm is allowed to pop this bubble.
+    /// Bubbles with `assignedArm == nil` accept any arm (single-active stages).
+    /// Bilateral stages set `assignedArm` to enforce arm-specific pops.
+    func canBePopped(by arm: ActiveArm) -> Bool {
+        guard let assigned = assignedArm else { return true }
+        return assigned == arm
+    }
 
     static func == (lhs: Bubble, rhs: Bubble) -> Bool {
         lhs.id == rhs.id &&

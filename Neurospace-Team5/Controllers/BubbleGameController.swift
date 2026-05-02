@@ -155,6 +155,18 @@ final class BubbleGameController {
         currentStage >= StageConfig.totalStages
     }
 
+    var meetsUnlockCriteria: Bool {
+        let criteria = stageConfig.unlockCriteria
+        return popCount >= criteria.requiredPops && accuracy >= criteria.minimumAccuracy
+    }
+
+    var unlockProgressText: String {
+        let c = stageConfig.unlockCriteria
+        let acc = Int((accuracy * 100).rounded())
+        let req = Int((c.minimumAccuracy * 100).rounded())
+        return "Accuracy \(acc)% / \(req)%   ·   Pops \(popCount)/\(c.requiredPops)"
+    }
+
     func advanceStage() {
         guard canAdvanceStage else { return }
 
@@ -231,7 +243,7 @@ final class BubbleGameController {
             return
         }
 
-        if let assigned = target.assignedArm, assigned != activeArm {
+        if !target.canBePopped(by: activeArm) {
             stopMotion()
             return
         }
@@ -394,8 +406,7 @@ final class BubbleGameController {
         guard let idx = bubbles.firstIndex(where: { $0.id == id }),
               !bubbles[idx].isGone else { return }
 
-        if let assigned = bubbles[idx].assignedArm,
-           assigned != activeArm {
+        if !bubbles[idx].canBePopped(by: activeArm) {
             return
         }
 
@@ -462,11 +473,7 @@ final class BubbleGameController {
         var minDist: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-            if let assigned = bubble.assignedArm,
-               assigned != arm {
-                continue
-            }
-
+            guard bubble.canBePopped(by: arm) else { continue }
             minDist = min(minDist, simd_distance(bubble.position, tip))
         }
 
@@ -478,10 +485,7 @@ final class BubbleGameController {
         var minDist: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-            if let assigned = bubble.assignedArm,
-               assigned != activeArm {
-                continue
-            }
+            guard bubble.canBePopped(by: activeArm) else { continue }
 
             let d = simd_distance(bubble.position, currentArmState.tipPosition)
             if d < minDist {
@@ -510,10 +514,7 @@ final class BubbleGameController {
         var bestScore: Float = -.greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
-            if let assigned = bubble.assignedArm,
-               assigned != activeArm {
-                continue
-            }
+            guard bubble.canBePopped(by: activeArm) else { continue }
 
             let toBubble = bubble.position - tip
             let distance = simd_length(toBubble)
@@ -591,16 +592,26 @@ final class BubbleGameController {
         let yRange: ClosedRange<Float> = config.allowedAxes.contains(.y) ? -0.08 ... 0.30 : 0.08 ... 0.12
         let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.26 ... 0.14 : -0.06 ... 0.06
 
-        let minDistance = config.bubbleRadius * 3.2
+        let minDistance = config.bubbleRadius * 2.0
 
         let rightTipStart = SIMD3<Float>(0.16, 0.02, 0.00)
         let leftTipStart  = SIMD3<Float>(-0.16, 0.02, 0.00)
-        let safeRadius = max(config.bubbleRadius + 0.028, 0.06) + 0.10
+        let safeRadius = config.bubbleRadius + 0.025
+
+        let centerExclusionX: Float = max(0.06, config.bubbleRadius * 0.6)
+        let centerExclusionZ: Float = max(0.05, config.bubbleRadius * 0.5)
+
+        // Stage info / control panel keep-out box. Mirrors the panel's runtime
+        // position in ImmersiveView (panel.position = (0.34, 0.18, 0.02))
+        // with a half-extent generous enough to cover the panel even when its
+        // debug section is expanded.
+        let panelCenter = SIMD3<Float>(0.34, 0.18, 0.02)
+        let panelHalfExtent = SIMD3<Float>(0.18, 0.13, 0.06)
 
         var positions: [SIMD3<Float>] = []
         var tries = 0
 
-        while positions.count < config.bubbleCount && tries < 500 {
+        while positions.count < config.bubbleCount && tries < 1200 {
             tries += 1
 
             let candidate = SIMD3<Float>(
@@ -609,12 +620,26 @@ final class BubbleGameController {
                 Float.random(in: zRange)
             )
 
+            // Only exclude the upper-center area (around the player's face),
+            // not the entire mid-body column. Stage 1's bubbles sit at y ≈ 0.10
+            // (below the face), so they should be allowed at center x.
             let tooCloseToCenter =
-                abs(candidate.x) < 0.10 &&
-                candidate.y > -0.02 && candidate.y < 0.18 &&
-                abs(candidate.z) < 0.08
+                abs(candidate.x) < centerExclusionX &&
+                candidate.y > 0.18 &&
+                abs(candidate.z) < centerExclusionZ
 
             if tooCloseToCenter {
+                continue
+            }
+
+            // Reject any candidate whose bubble (with its own radius) would
+            // visually overlap the stage-info panel keep-out box.
+            let dx = abs(candidate.x - panelCenter.x)
+            let dy = abs(candidate.y - panelCenter.y)
+            let dz = abs(candidate.z - panelCenter.z)
+            if dx < panelHalfExtent.x + config.bubbleRadius &&
+               dy < panelHalfExtent.y + config.bubbleRadius &&
+               dz < panelHalfExtent.z + config.bubbleRadius {
                 continue
             }
 
@@ -631,8 +656,18 @@ final class BubbleGameController {
         }
 
         return positions.map { position in
-            let arm: ActiveArm? = position.x < 0 ? .left : .right
-            let type: BubbleType = arm == .left ? .blue : .red
+            let assignedArm: ActiveArm?
+            let type: BubbleType
+
+            switch config.armMode {
+            case .bilateral:
+                let arm: ActiveArm = position.x < 0 ? .left : .right
+                assignedArm = arm
+                type = arm == .left ? .blue : .red
+            case .singleActive:
+                assignedArm = nil
+                type = BubbleType.randomWeighted()
+            }
 
             let speed = Float.random(in: config.bubbleSpeed)
 
@@ -649,7 +684,7 @@ final class BubbleGameController {
             return Bubble(
                 position: position,
                 type: type,
-                assignedArm: arm,
+                assignedArm: assignedArm,
                 velocity: velocity,
                 lifetime: config.bubbleLifetime
             )

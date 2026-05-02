@@ -17,6 +17,7 @@ struct Neurospace_Team5App: App {
             ContentView()
                 .environment(appModel)
         }
+        .windowStyle(.plain)
 
         WindowGroup(id: appModel.congratsWindowID) {
             CongratsView()
@@ -32,6 +33,7 @@ struct Neurospace_Team5App: App {
 
         ImmersiveSpace(id: appModel.lobbySkyboxID) {
             LobbySkyboxView()
+                .environment(appModel)
         }
         .immersionStyle(selection: .constant(.full), in: .full)
 

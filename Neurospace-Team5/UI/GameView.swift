@@ -14,82 +14,151 @@ struct CongratsView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
+    private var controller: BubbleGameController { appModel.gameController }
+
+    private var canProceed: Bool {
+        controller.isOnFinalStage || controller.meetsUnlockCriteria
+    }
+
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "party.popper.fill")
+            Image(systemName: canProceed ? "party.popper.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(canProceed ? .yellow : .orange)
 
             VStack(spacing: 8) {
-                Text("Congratulations!")
+                Text(canProceed ? "Congratulations!" : "Stage Not Cleared")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
 
-                let controller = appModel.gameController
                 if controller.isOnFinalStage {
                     Text("You completed all stages!")
                         .font(.system(size: 16))
                         .foregroundStyle(.secondary)
-                } else {
+                } else if canProceed {
                     Text("Stage \(controller.currentStage) cleared! Ready for Stage \(controller.currentStage + 1)?")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Unlock criteria not met. Try Stage \(controller.currentStage) again to proceed.")
                         .font(.system(size: 16))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
             }
 
-            Text("Score: \(appModel.gameController.score)")
+            Text("Score: \(controller.score)")
                 .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .foregroundStyle(.purple)
 
-            Button(appModel.gameController.isOnFinalStage ? "Go to Main" : "Next Stage") {
-                Task { @MainActor in
-                    if appModel.gameController.canAdvanceStage {
-                        appModel.gameController.advanceStage()
-                        print("[Congrats] advanced to stage \(appModel.gameController.currentStage)")
-
-                        if appModel.immersiveSpaceState == .open {
-                            appModel.gameController.startSession()
-                            dismissWindow(id: appModel.congratsWindowID)
-                            dismissWindow(id: appModel.missionFailedWindowID)
-                        } else {
-                            appModel.immersiveSpaceState = .inTransition
-                            switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
-                            case .opened:
-                                appModel.immersiveSpaceState = .open
-                                appModel.gameController.startSession()
-                                dismissWindow(id: appModel.congratsWindowID)
-                                dismissWindow(id: appModel.missionFailedWindowID)
-
-                            case .userCancelled, .error:
-                                fallthrough
-
-                            @unknown default:
-                                appModel.immersiveSpaceState = .closed
-                            }
-                        }
-                    } else {
-                        appModel.gameController.resetGame()
-
-                        if appModel.immersiveSpaceState == .open {
-                            appModel.immersiveSpaceState = .inTransition
-                            await dismissImmersiveSpace()
-                            appModel.immersiveSpaceState = .closed
-                        }
-
-                        openWindow(id: appModel.mainWindowID)
-                        dismissWindow(id: appModel.congratsWindowID)
-                        dismissWindow(id: appModel.missionFailedWindowID)
-                    }
-                }
+            if !controller.isOnFinalStage {
+                Text(controller.unlockProgressText)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(canProceed ? DS.success : DS.warning)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        (canProceed ? DS.success : DS.warning).opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 10)
+                    )
             }
-            .buttonStyle(.borderedProminent)
-            .tint(DS.teal)
-            .controlSize(.large)
+
+            HStack(spacing: 12) {
+                if !canProceed {
+                    Button("Try Again") {
+                        retryStage()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+
+                Button(primaryButtonLabel) {
+                    primaryAction()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DS.teal)
+                .controlSize(.large)
+            }
         }
         .padding(40)
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
             dismissWindow(id: appModel.congratsWindowID)
+        }
+    }
+
+    private var primaryButtonLabel: String {
+        if controller.isOnFinalStage { return "Go to Main" }
+        return canProceed ? "Next Stage" : "Go to Main"
+    }
+
+    private func primaryAction() {
+        Task { @MainActor in
+            if !controller.isOnFinalStage && canProceed && controller.canAdvanceStage {
+                controller.advanceStage()
+                print("[Congrats] advanced to stage \(controller.currentStage)")
+
+                if appModel.immersiveSpaceState == .open {
+                    controller.startSession()
+                    dismissWindow(id: appModel.congratsWindowID)
+                    dismissWindow(id: appModel.missionFailedWindowID)
+                } else {
+                    appModel.immersiveSpaceState = .inTransition
+                    switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+                    case .opened:
+                        appModel.immersiveSpaceState = .open
+                        controller.startSession()
+                        dismissWindow(id: appModel.congratsWindowID)
+                        dismissWindow(id: appModel.missionFailedWindowID)
+
+                    case .userCancelled, .error:
+                        fallthrough
+
+                    @unknown default:
+                        appModel.immersiveSpaceState = .closed
+                    }
+                }
+            } else {
+                dismissWindow(id: appModel.congratsWindowID)
+                dismissWindow(id: appModel.missionFailedWindowID)
+
+                appModel.saveSessionRecord()
+                controller.resetGame()
+
+                if appModel.immersiveSpaceState == .open {
+                    appModel.immersiveSpaceState = .inTransition
+                    await dismissImmersiveSpace()
+                    appModel.immersiveSpaceState = .closed
+                }
+
+                openWindow(id: appModel.mainWindowID)
+            }
+        }
+    }
+
+    private func retryStage() {
+        Task { @MainActor in
+            dismissWindow(id: appModel.congratsWindowID)
+            dismissWindow(id: appModel.missionFailedWindowID)
+
+            controller.resetGame(keepStage: true)
+
+            if appModel.immersiveSpaceState == .open {
+                controller.startSession()
+            } else {
+                appModel.immersiveSpaceState = .inTransition
+                switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+                case .opened:
+                    appModel.immersiveSpaceState = .open
+                    controller.startSession()
+
+                case .userCancelled, .error:
+                    fallthrough
+
+                @unknown default:
+                    appModel.immersiveSpaceState = .closed
+                }
+            }
         }
     }
 }
@@ -127,6 +196,7 @@ struct MissionFailedView: View {
                         dismissWindow(id: appModel.missionFailedWindowID)
                         dismissWindow(id: appModel.congratsWindowID)
 
+                        appModel.saveSessionRecord()
                         appModel.gameController.resetGame()
 
                         if appModel.immersiveSpaceState == .open {
@@ -189,7 +259,6 @@ struct MissionFailedView: View {
 struct GameControlPanel: View {
     @Environment(AppModel.self) private var appModel
     @State private var confirmingStop = false
-    @State private var showJSONTesting = true
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -258,17 +327,6 @@ struct GameControlPanel: View {
                     Spacer()
 
                     Button {
-                        showJSONTesting.toggle()
-                    } label: {
-                        Image(systemName: showJSONTesting ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .frame(width: 26, height: 26)
-                            .background(DS.teal.opacity(0.45), in: RoundedRectangle(cornerRadius: 7))
-                    }
-                    .hoverEffect()
-
-                    Button {
                         confirmingStop = true
                     } label: {
                         Image(systemName: "xmark")
@@ -316,7 +374,7 @@ struct GameControlPanel: View {
                 }
                 .padding(16)
 
-                if showJSONTesting {
+                if appModel.debugMode {
                     Divider().opacity(0.3)
 
                     VStack(alignment: .leading, spacing: 8) {
