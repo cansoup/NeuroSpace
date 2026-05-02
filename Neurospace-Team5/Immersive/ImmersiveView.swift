@@ -1,7 +1,7 @@
 //
 //  ImmersiveView.swift
 //  Neurospace-Team5
-//
+
 
 import SwiftUI
 import RealityKit
@@ -77,6 +77,8 @@ struct ImmersiveView: View {
         let arSession = ARKitSession()
         let worldTracking = WorldTrackingProvider()
         var arSessionStarted = false
+        // Smoothed cursor position for exponential interpolation
+        var smoothedCursorPosition: SIMD3<Float>? = nil
     }
 
     private let worldAnchorOffset = SIMD3<Float>(0, 1.45, -1.0)
@@ -85,6 +87,7 @@ struct ImmersiveView: View {
     private let startOrbPosition = SIMD3<Float>(0.0, -0.06, 0.02)
     private let startPanelPosition = SIMD3<Float>(0.0, 0.20, 0.02)
 
+    // How close (metres) the head ray must pass to a bubble to select it
     private let gazeSelectRadius: Float = 0.11
     private let gazeDwellDuration: TimeInterval = 0.65
 
@@ -264,26 +267,19 @@ struct ImmersiveView: View {
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
                 updateGazeCursorAndMarker(
-                    in: root,
                     result: nil,
                     isVisible: false
                 )
                 removeAllBubbleEntities(from: root)
             } else {
-                let gazeResult = currentGazeTargetResult(from: controller.bubbles)
-
-                controller.targetedBubbleID = gazeResult.bubble?.id
-
-                updateGazeCursorAndMarker(
-                    in: root,
-                    result: gazeResult,
-                    isVisible: controller.sessionState == .playing
-                )
-
+                // Cursor position and controller.targetedBubbleID are updated
+                // every frame in updateCursorEveryFrame() via the .task loop,
+                // so they stay live regardless of whether BCI data is active.
+                // syncBubbles needs root (from content) so it stays here.
                 syncBubbles(
                     in: root,
                     with: controller.bubbles,
-                    highlightedID: gazeResult.bubble?.id
+                    highlightedID: controller.targetedBubbleID
                 )
             }
 
@@ -388,7 +384,8 @@ struct ImmersiveView: View {
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
                 updatePreSessionStartInteraction()
-                updateGazeAndFOV()
+                updateBackgroundPlane()
+                updateCursorEveryFrame()
 
                 do {
                     try await Task.sleep(for: .seconds(1.0 / 60.0))
@@ -410,6 +407,7 @@ struct ImmersiveView: View {
                 gazeHoverBeganAt = nil
                 clickCount = 0
                 bubbleStore.lastSeenClickCount = 0
+                bubbleStore.smoothedCursorPosition = nil
 
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
@@ -425,301 +423,150 @@ struct ImmersiveView: View {
         }
     }
 
-    private func poseName(for zone: BubbleZone, variant: PoseVariant) -> String {
-        "Pose_\(variant.rawValue)_\(zone.rawValue)"
-    }
+    // MARK: - Head-Ray Targeting
+    //
+    // This is the programmatic targeting system. It fires a ray from the head
+    // pose and selects the nearest bubble within gazeSelectRadius.
+    //
+    // Visual targeting (what the user *sees* highlighted) is handled separately
+    // by HoverEffectComponent on each bubble — the system uses real eye tracking
+    // for that rendering without telling us which entity is lit.
+    //
+    // The two systems work together:
+    //   HoverEffectComponent → shows the user which bubble is "aimed at" (eye-accurate)
+    //   Head ray             → tells the game which bubble is targeted for BCI logic
 
-    private func loadArmEntity(named name: String) async -> Entity? {
-        do {
-            return try await Entity(named: name, in: realityKitContentBundle)
-        } catch {
-            print("Failed to load arm asset \(name): \(error)")
-            return nil
-        }
-    }
-
-    private func configurePoseEntity(
-        _ entity: Entity,
-        for zone: BubbleZone,
-        variant: PoseVariant
-    ) {
-        let transform = transformForZone(zone, variant: variant)
-        entity.position = transform.position
-        entity.scale = transform.scale
-        entity.orientation = transform.orientation
-    }
-
-    private func transformForZone(
-        _ zone: BubbleZone,
-        variant: PoseVariant
-    ) -> ArmVisualTransform {
-        let baseScale = SIMD3<Float>(repeating: 0.90)
-
-        let rotateX = simd_quatf(
-            angle: .pi * 0.5,
-            axis: SIMD3<Float>(1, 0, 0)
-        )
-
-        let rotateY = simd_quatf(
-            angle: .pi,
-            axis: SIMD3<Float>(0, 1, 0)
-        )
-
-        let baseOrientation = rotateX * rotateY
-
-        let rightTransform: ArmVisualTransform
-
-        switch zone {
-        case .upperLeft:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(-0.02, -0.26, -0.30),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: -.pi / 10, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: -.pi / 20, axis: SIMD3<Float>(0, 0, 1))
-            )
-
-        case .upperMiddle:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.0, -0.24, -0.30),
-                scale: baseScale,
-                orientation: baseOrientation
-            )
-
-        case .upperRight:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.02, -0.25, -0.30),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(0, 1, 0))
-            )
-
-        case .middleLeft:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(-0.04, -0.31, -0.30),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: -.pi / 8, axis: SIMD3<Float>(0, 1, 0))
-            )
-
-        case .middleMiddle:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.0, -0.30, -0.30),
-                scale: baseScale,
-                orientation: baseOrientation
-            )
-
-        case .middleRight:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.06, -0.35, -0.28),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 10, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: -.pi / 16, axis: SIMD3<Float>(1, 0, 0))
-            )
-
-        case .lowerLeft:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(-0.03, -0.37, -0.28),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: -.pi / 9, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: .pi / 14, axis: SIMD3<Float>(0, 0, 1))
-            )
-
-        case .lowerMiddle:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.0, -0.39, -0.28),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(1, 0, 0))
-            )
-
-        case .lowerRight:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.04, -0.37, -0.28),
-                scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 9, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: -.pi / 14, axis: SIMD3<Float>(0, 0, 1))
-            )
+    private func currentHeadRayTargetResult(from bubbles: [Bubble]) -> GazeTargetResult {
+        guard let ray = currentHeadRayInRootSpace() else {
+            // No device anchor — fall back to the most central bubble
+            let fallback = bestCentralBubble(from: bubbles)
+            let pos = fallback?.position ?? SIMD3<Float>(0, 0.08, 0.02)
+            return updateHoverState(bubble: fallback, cursorPosition: smoothCursor(pos))
         }
 
-        guard variant == .left else {
-            return rightTransform
-        }
+        var bestBubble: Bubble?
+        var bestPerp: Float = .greatestFiniteMagnitude
+        var bestDepth: Float = 0.9
 
-        let mirroredPosition = SIMD3<Float>(
-            -rightTransform.position.x,
-            rightTransform.position.y,
-            rightTransform.position.z
-        )
+        for bubble in bubbles where !bubble.isGone {
+            let toBubble = bubble.position - ray.origin
+            let depth = simd_dot(toBubble, ray.direction)
+            guard depth > 0 else { continue }
 
-        var mirroredScale = rightTransform.scale
-        mirroredScale.x *= -1
+            let closestPoint = ray.origin + ray.direction * depth
+            let perp = simd_distance(bubble.position, closestPoint)
 
-        let mirroredOrientation =
-            simd_quatf(angle: -.pi / 6, axis: SIMD3<Float>(0, 1, 0)) *
-            rightTransform.orientation
-
-        return ArmVisualTransform(
-            position: mirroredPosition,
-            scale: mirroredScale,
-            orientation: mirroredOrientation
-        )
-    }
-
-    private func currentVisibleZone(
-        in armsRoot: Entity,
-        variant: PoseVariant
-    ) -> BubbleZone? {
-        let prefix = "Pose_\(variant.rawValue)_"
-
-        for child in armsRoot.children where child.isEnabled {
-            guard child.name.hasPrefix(prefix) else { continue }
-
-            let suffix = String(child.name.dropFirst(prefix.count))
-            return BubbleZone(rawValue: suffix)
-        }
-
-        return nil
-    }
-
-    private func stableVisualZone(
-        for state: ArmState,
-        currentZone: BubbleZone?
-    ) -> BubbleZone {
-        let delta = state.tipPosition - state.basePosition
-
-        let verticalThresholdHigh: Float = 0.15
-        let verticalThresholdLow: Float = 0.09
-        let horizontalThresholdHigh: Float = 0.11
-        let horizontalThresholdLow: Float = 0.06
-
-        let vertical: Int
-
-        switch currentZone {
-        case .some(.upperLeft), .some(.upperMiddle), .some(.upperRight):
-            vertical = delta.y < verticalThresholdLow ? 0 : 1
-
-        case .some(.lowerLeft), .some(.lowerMiddle), .some(.lowerRight):
-            vertical = delta.y > -verticalThresholdLow ? 0 : -1
-
-        default:
-            if delta.y > verticalThresholdHigh {
-                vertical = 1
-            } else if delta.y < -verticalThresholdHigh {
-                vertical = -1
-            } else {
-                vertical = 0
+            if perp < bestPerp {
+                bestPerp = perp
+                bestDepth = depth
+                bestBubble = bubble
             }
         }
 
-        let horizontal: Int
+        let cursorDepth = max(0.55, min(bestDepth, 1.35))
+        let rawCursorPos = ray.origin + ray.direction * cursorDepth
 
-        switch currentZone {
-        case .some(.upperLeft), .some(.middleLeft), .some(.lowerLeft):
-            horizontal = delta.x > -horizontalThresholdLow ? 0 : -1
-
-        case .some(.upperRight), .some(.middleRight), .some(.lowerRight):
-            horizontal = delta.x < horizontalThresholdLow ? 0 : 1
-
-        default:
-            if delta.x < -horizontalThresholdHigh {
-                horizontal = -1
-            } else if delta.x > horizontalThresholdHigh {
-                horizontal = 1
-            } else {
-                horizontal = 0
-            }
-        }
-
-        switch (vertical, horizontal) {
-        case (1, -1): return .upperLeft
-        case (1, 0): return .upperMiddle
-        case (1, 1): return .upperRight
-        case (0, -1): return .middleLeft
-        case (0, 0): return .middleMiddle
-        case (0, 1): return .middleRight
-        case (-1, -1): return .lowerLeft
-        case (-1, 0): return .lowerMiddle
-        case (-1, 1): return .lowerRight
-        default: return .middleMiddle
-        }
-    }
-
-    private func updateArmPoseDisplay(
-        in armsRoot: Entity,
-        zone: BubbleZone,
-        variant: PoseVariant,
-        animateOnChange: Bool
-    ) {
-        let targetName = poseName(for: zone, variant: variant)
-        let currentlyVisibleName =
-            armsRoot.children.first(where: { $0.isEnabled })?.name
-
-        guard currentlyVisibleName != targetName else { return }
-
-        for child in armsRoot.children {
-            child.isEnabled = child.name == targetName
-        }
-
-        guard animateOnChange else { return }
-
-        if let pose = armsRoot.findEntity(named: targetName) {
-            playAnimationIfAvailable(on: pose)
-        }
-    }
-
-    private func updateArmsRootTransform(
-        _ armsRoot: Entity,
-        activeState: ArmState,
-        activeArm: ActiveArm,
-        isReadyStage: Bool
-    ) {
-        _ = activeState
-        _ = activeArm
-
-        let targetTransform = Transform(
-            scale: SIMD3<Float>(repeating: 1.0),
-            rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
-            translation: .zero
-        )
-
-        let duration: TimeInterval = isReadyStage ? 0.20 : 0.10
-
-        armsRoot.move(
-            to: targetTransform,
-            relativeTo: armsRoot.parent,
-            duration: duration,
-            timingFunction: .easeInOut
-        )
-    }
-
-    private func playAnimationIfAvailable(on entity: Entity) {
-        if let animatedEntity = findAnimatedEntity(in: entity),
-           let animation = animatedEntity.availableAnimations.last {
-            animatedEntity.playAnimation(
-                animation,
-                transitionDuration: 0.22,
-                startsPaused: false
+        if bestPerp <= gazeSelectRadius, let bubble = bestBubble {
+            // Snap cursor to the bubble centre when the ray is close enough
+            return updateHoverState(
+                bubble: bubble,
+                cursorPosition: smoothCursor(bubble.position)
+            )
+        } else {
+            return updateHoverState(
+                bubble: nil,
+                cursorPosition: smoothCursor(rawCursorPos)
             )
         }
     }
 
-    private func findAnimatedEntity(in entity: Entity) -> Entity? {
-        for child in entity.children {
-            if let animatedChild = findAnimatedEntity(in: child) {
-                return animatedChild
-            }
-        }
+    /// Returns a ray from the head centre in the head-forward direction.
+    /// The cursor follows this ray; HoverEffectComponent uses real eye tracking.
+    private func currentHeadRayInRootSpace() -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
+        guard let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
+            atTimestamp: CACurrentMediaTime()
+        ) else { return nil }
 
-        if !entity.availableAnimations.isEmpty {
-            return entity
-        }
+        let t = deviceAnchor.originFromAnchorTransform
 
-        return nil
+        let worldOrigin = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
+        let worldForward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
+
+        return (worldOrigin - worldAnchorOffset, simd_normalize(worldForward))
     }
+
+    /// Exponential moving average — smooths cursor movement so it doesn't snap.
+    private let cursorSmoothAlpha: Float = 0.20
+
+    private func smoothCursor(_ newPos: SIMD3<Float>) -> SIMD3<Float> {
+        guard let existing = bubbleStore.smoothedCursorPosition else {
+            bubbleStore.smoothedCursorPosition = newPos
+            return newPos
+        }
+        let s = existing * (1 - cursorSmoothAlpha) + newPos * cursorSmoothAlpha
+        bubbleStore.smoothedCursorPosition = s
+        return s
+    }
+
+    // MARK: - Hover / Dwell state
+
+    private func updateHoverState(
+        bubble: Bubble?,
+        cursorPosition: SIMD3<Float>
+    ) -> GazeTargetResult {
+        if gazeHoverBubbleID != bubble?.id {
+            gazeHoverBubbleID = bubble?.id
+            gazeHoverBeganAt = bubble == nil ? nil : Date()
+        }
+
+        let progress: Float
+        if let began = gazeHoverBeganAt, bubble != nil {
+            progress = Float(min(1.0, Date().timeIntervalSince(began) / gazeDwellDuration))
+        } else {
+            progress = 0
+        }
+
+        return GazeTargetResult(bubble: bubble, cursorPosition: cursorPosition, holdProgress: progress)
+    }
+
+    // MARK: - Background plane toggle
+
+    @MainActor
+    private func updateBackgroundPlane() {
+        let playing = appModel.gameController.sessionState == .playing
+        if let plane = bubbleStore.backgroundPlane, plane.isEnabled != playing {
+            plane.isEnabled = playing
+        }
+    }
+
+    // MARK: - Per-frame cursor update
+    //
+    // The RealityView update: block only fires when SwiftUI detects a state change.
+    // When BCI demo data is off and nothing else is changing, update: never runs,
+    // so the cursor freezes. This function is called every frame from the .task
+    // loop and directly mutates the cursor/marker entity positions, bypassing
+    // SwiftUI's change-detection entirely.
+
+    @MainActor
+    private func updateCursorEveryFrame() {
+        let controller = appModel.gameController
+        guard controller.sessionState == .playing else {
+            // Hide cursor outside of gameplay
+            bubbleStore.gazeCursor?.isEnabled = false
+            bubbleStore.holdMarker?.isEnabled = false
+            return
+        }
+
+        let gazeResult = currentHeadRayTargetResult(from: controller.bubbles)
+
+        // Keep controller target fresh every frame regardless of BCI activity
+        controller.targetedBubbleID = gazeResult.bubble?.id
+
+        // Directly update entity positions — no SwiftUI state change needed
+        updateGazeCursorAndMarker(result: gazeResult, isVisible: true)
+    }
+
+    // MARK: - Pre-session start interaction
 
     @MainActor
     private func updatePreSessionStartInteraction() {
@@ -736,13 +583,11 @@ struct ImmersiveView: View {
             : controller.rightArmState.tipPosition
 
         let distance = simd_distance(activeTip, startOrbPosition)
-
         let hoverRadius: Float = 0.10
         let dwellDuration: TimeInterval = 0.45
 
         if distance <= hoverRadius {
             startTargetHighlighted = true
-
             if startHoverBeganAt == nil {
                 startHoverBeganAt = Date()
             } else if let began = startHoverBeganAt,
@@ -756,139 +601,277 @@ struct ImmersiveView: View {
     }
 
     @MainActor
-    private func updateGazeAndFOV() {
-        let playingNow = appModel.gameController.sessionState == .playing
-
-        if let plane = bubbleStore.backgroundPlane,
-           plane.isEnabled != playingNow {
-            plane.isEnabled = playingNow
-        }
+    private func triggerSessionStart() {
+        guard appModel.gameController.sessionState == .ready else { return }
+        startHoverBeganAt = nil
+        startTargetHighlighted = false
+        appModel.gameController.startSession()
     }
 
-    private func currentGazeTargetResult(from bubbles: [Bubble]) -> GazeTargetResult {
-        let ray = currentHeadRayInRootSpace()
-        let fallbackCursor = SIMD3<Float>(0, 0.08, 0.02)
+    // MARK: - Arm pose helpers
 
-        guard let ray else {
-            let fallbackBubble = bestCentralBubble(from: bubbles)
-            return updateHoverState(
-                bubble: fallbackBubble,
-                cursorPosition: fallbackBubble?.position ?? fallbackCursor
-            )
-        }
-
-        var bestBubble: Bubble?
-        var bestPerpendicularDistance: Float = .greatestFiniteMagnitude
-        var bestDepth: Float = .greatestFiniteMagnitude
-
-        for bubble in bubbles where !bubble.isGone {
-            let toBubble = bubble.position - ray.origin
-            let depth = simd_dot(toBubble, ray.direction)
-
-            guard depth > 0 else { continue }
-
-            let closestPointOnRay = ray.origin + ray.direction * depth
-            let perpendicularDistance = simd_distance(bubble.position, closestPointOnRay)
-
-            if perpendicularDistance < bestPerpendicularDistance {
-                bestPerpendicularDistance = perpendicularDistance
-                bestDepth = depth
-                bestBubble = bubble
-            }
-        }
-
-        let cursorDepth = max(0.55, min(bestDepth, 1.35))
-        let cursorPosition = ray.origin + ray.direction * cursorDepth
-
-        if bestPerpendicularDistance <= gazeSelectRadius {
-            return updateHoverState(
-                bubble: bestBubble,
-                cursorPosition: bestBubble?.position ?? cursorPosition
-            )
-        } else {
-            return updateHoverState(
-                bubble: nil,
-                cursorPosition: cursorPosition
-            )
-        }
+    private func poseName(for zone: BubbleZone, variant: PoseVariant) -> String {
+        "Pose_\(variant.rawValue)_\(zone.rawValue)"
     }
 
-    private func currentHeadRayInRootSpace() -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
-        guard let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
-            atTimestamp: CACurrentMediaTime()
-        ) else {
+    private func loadArmEntity(named name: String) async -> Entity? {
+        do {
+            return try await Entity(named: name, in: realityKitContentBundle)
+        } catch {
+            print("Failed to load arm asset \(name): \(error)")
             return nil
         }
-
-        let transform = deviceAnchor.originFromAnchorTransform
-
-        let worldOrigin = SIMD3<Float>(
-            transform.columns.3.x,
-            transform.columns.3.y,
-            transform.columns.3.z
-        )
-
-        let forwardWorld = -SIMD3<Float>(
-            transform.columns.2.x,
-            transform.columns.2.y,
-            transform.columns.2.z
-        )
-
-        let localOrigin = worldOrigin - worldAnchorOffset
-        let localDirection = simd_normalize(forwardWorld)
-
-        return (localOrigin, localDirection)
     }
 
-    private func updateHoverState(
-        bubble: Bubble?,
-        cursorPosition: SIMD3<Float>
-    ) -> GazeTargetResult {
-        if gazeHoverBubbleID != bubble?.id {
-            gazeHoverBubbleID = bubble?.id
-            gazeHoverBeganAt = bubble == nil ? nil : Date()
-        }
-
-        let progress: Float
-
-        if let began = gazeHoverBeganAt, bubble != nil {
-            let elapsed = Date().timeIntervalSince(began)
-            progress = Float(min(1.0, elapsed / gazeDwellDuration))
-        } else {
-            progress = 0
-        }
-
-        return GazeTargetResult(
-            bubble: bubble,
-            cursorPosition: cursorPosition,
-            holdProgress: progress
-        )
+    private func configurePoseEntity(_ entity: Entity, for zone: BubbleZone, variant: PoseVariant) {
+        let transform = transformForZone(zone, variant: variant)
+        entity.position = transform.position
+        entity.scale = transform.scale
+        entity.orientation = transform.orientation
     }
+
+    private func transformForZone(_ zone: BubbleZone, variant: PoseVariant) -> ArmVisualTransform {
+        let baseScale = SIMD3<Float>(repeating: 0.90)
+        let rotateX = simd_quatf(angle: .pi * 0.5, axis: SIMD3<Float>(1, 0, 0))
+        let rotateY = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
+        let baseOrientation = rotateX * rotateY
+
+        let rightTransform: ArmVisualTransform
+
+        switch zone {
+        case .upperLeft:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(-0.02, -0.26, -0.30), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: -.pi / 10, axis: SIMD3<Float>(0, 1, 0))
+                    * simd_quatf(angle: -.pi / 20, axis: SIMD3<Float>(0, 0, 1)))
+        case .upperMiddle:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(0.0, -0.24, -0.30), scale: baseScale,
+                orientation: baseOrientation)
+        case .upperRight:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(0.02, -0.25, -0.30), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(0, 1, 0)))
+        case .middleLeft:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(-0.04, -0.31, -0.30), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: -.pi / 8, axis: SIMD3<Float>(0, 1, 0)))
+        case .middleMiddle:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(0.0, -0.30, -0.30), scale: baseScale,
+                orientation: baseOrientation)
+        case .middleRight:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(0.06, -0.35, -0.28), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: .pi / 10, axis: SIMD3<Float>(0, 1, 0))
+                    * simd_quatf(angle: -.pi / 16, axis: SIMD3<Float>(1, 0, 0)))
+        case .lowerLeft:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(-0.03, -0.37, -0.28), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: -.pi / 9, axis: SIMD3<Float>(0, 1, 0))
+                    * simd_quatf(angle: .pi / 14, axis: SIMD3<Float>(0, 0, 1)))
+        case .lowerMiddle:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(0.0, -0.39, -0.28), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(1, 0, 0)))
+        case .lowerRight:
+            rightTransform = ArmVisualTransform(
+                position: SIMD3<Float>(0.04, -0.37, -0.28), scale: baseScale,
+                orientation: baseOrientation
+                    * simd_quatf(angle: .pi / 9, axis: SIMD3<Float>(0, 1, 0))
+                    * simd_quatf(angle: -.pi / 14, axis: SIMD3<Float>(0, 0, 1)))
+        }
+
+        guard variant == .left else { return rightTransform }
+
+        let mirroredPosition = SIMD3<Float>(-rightTransform.position.x, rightTransform.position.y, rightTransform.position.z)
+        var mirroredScale = rightTransform.scale
+        mirroredScale.x *= -1
+        let mirroredOrientation = simd_quatf(angle: -.pi / 6, axis: SIMD3<Float>(0, 1, 0)) * rightTransform.orientation
+
+        return ArmVisualTransform(position: mirroredPosition, scale: mirroredScale, orientation: mirroredOrientation)
+    }
+
+    private func currentVisibleZone(in armsRoot: Entity, variant: PoseVariant) -> BubbleZone? {
+        let prefix = "Pose_\(variant.rawValue)_"
+        for child in armsRoot.children where child.isEnabled {
+            guard child.name.hasPrefix(prefix) else { continue }
+            return BubbleZone(rawValue: String(child.name.dropFirst(prefix.count)))
+        }
+        return nil
+    }
+
+    private func stableVisualZone(for state: ArmState, currentZone: BubbleZone?) -> BubbleZone {
+        let delta = state.tipPosition - state.basePosition
+        let vHigh: Float = 0.15, vLow: Float = 0.09
+        let hHigh: Float = 0.11, hLow: Float = 0.06
+
+        let vertical: Int
+        switch currentZone {
+        case .some(.upperLeft), .some(.upperMiddle), .some(.upperRight):
+            vertical = delta.y < vLow ? 0 : 1
+        case .some(.lowerLeft), .some(.lowerMiddle), .some(.lowerRight):
+            vertical = delta.y > -vLow ? 0 : -1
+        default:
+            vertical = delta.y > vHigh ? 1 : delta.y < -vHigh ? -1 : 0
+        }
+
+        let horizontal: Int
+        switch currentZone {
+        case .some(.upperLeft), .some(.middleLeft), .some(.lowerLeft):
+            horizontal = delta.x > -hLow ? 0 : -1
+        case .some(.upperRight), .some(.middleRight), .some(.lowerRight):
+            horizontal = delta.x < hLow ? 0 : 1
+        default:
+            horizontal = delta.x < -hHigh ? -1 : delta.x > hHigh ? 1 : 0
+        }
+
+        switch (vertical, horizontal) {
+        case (1, -1): return .upperLeft
+        case (1,  0): return .upperMiddle
+        case (1,  1): return .upperRight
+        case (0, -1): return .middleLeft
+        case (0,  0): return .middleMiddle
+        case (0,  1): return .middleRight
+        case (-1,-1): return .lowerLeft
+        case (-1, 0): return .lowerMiddle
+        case (-1, 1): return .lowerRight
+        default:      return .middleMiddle
+        }
+    }
+
+    private func updateArmPoseDisplay(
+        in armsRoot: Entity,
+        zone: BubbleZone,
+        variant: PoseVariant,
+        animateOnChange: Bool
+    ) {
+        let targetName = poseName(for: zone, variant: variant)
+        guard armsRoot.children.first(where: { $0.isEnabled })?.name != targetName else { return }
+
+        for child in armsRoot.children {
+            child.isEnabled = child.name == targetName
+        }
+
+        if animateOnChange, let pose = armsRoot.findEntity(named: targetName) {
+            playAnimationIfAvailable(on: pose)
+        }
+    }
+
+    private func updateArmsRootTransform(
+        _ armsRoot: Entity,
+        activeState: ArmState,
+        activeArm: ActiveArm,
+        isReadyStage: Bool
+    ) {
+        _ = activeState; _ = activeArm
+        let targetTransform = Transform(
+            scale: SIMD3<Float>(repeating: 1.0),
+            rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
+            translation: .zero
+        )
+        armsRoot.move(to: targetTransform, relativeTo: armsRoot.parent,
+                      duration: isReadyStage ? 0.20 : 0.10, timingFunction: .easeInOut)
+    }
+
+    private func playAnimationIfAvailable(on entity: Entity) {
+        if let animated = findAnimatedEntity(in: entity),
+           let animation = animated.availableAnimations.last {
+            animated.playAnimation(animation, transitionDuration: 0.22, startsPaused: false)
+        }
+    }
+
+    private func findAnimatedEntity(in entity: Entity) -> Entity? {
+        for child in entity.children {
+            if let found = findAnimatedEntity(in: child) { return found }
+        }
+        return entity.availableAnimations.isEmpty ? nil : entity
+    }
+
+    // MARK: - Bubble helpers
 
     private func bestCentralBubble(from bubbles: [Bubble]) -> Bubble? {
-        var bestBubble: Bubble?
+        var best: Bubble?
         var bestScore: Float = .greatestFiniteMagnitude
-
         for bubble in bubbles where !bubble.isGone {
-            let centerDistance = sqrt(
-                (bubble.position.x * bubble.position.x) +
-                (bubble.position.y * bubble.position.y * 1.35)
-            )
-
-            let depthBias = abs(bubble.position.z) * 0.20
-            let score = centerDistance + depthBias
-
-            if score < bestScore {
-                bestScore = score
-                bestBubble = bubble
-            }
+            let score = sqrt(bubble.position.x * bubble.position.x
+                           + bubble.position.y * bubble.position.y * 1.35)
+                      + abs(bubble.position.z) * 0.20
+            if score < bestScore { bestScore = score; best = bubble }
         }
+        return best
+    }
 
-        return bestBubble
+    private func makeBubbleEntity(for bubble: Bubble, highlighted: Bool = false) -> ModelEntity {
+        let radius = appModel.gameController.stageConfig.bubbleRadius
+
+        let entity = ModelEntity(
+            mesh: .generateSphere(radius: radius),
+            materials: [makeBubbleMaterial(color: bubble.type.uiColor, highlighted: highlighted)]
+        )
+        entity.name = "Bubble_\(bubble.id.uuidString)"
+        entity.position = bubble.position
+        entity.scale = SIMD3<Float>(repeating: highlighted ? 1.18 : 1.0)
+        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
+        entity.components.set(InputTargetComponent())
+        // HoverEffectComponent: the system uses real eye tracking to render a glow
+        // when the user looks at this bubble. No callback is available — Apple
+        // intentionally keeps gaze private — but the visual feedback is eye-accurate.
+        entity.components.set(HoverEffectComponent(
+            .highlight(HoverEffectComponent.HighlightHoverEffectStyle(
+                color: .init(bubble.type.uiColor),
+                strength: 1.8
+            ))
+        ))
+        return entity
+    }
+
+    private func makeBubbleMaterial(color: UIColor, highlighted: Bool = false) -> PhysicallyBasedMaterial {
+        var m = PhysicallyBasedMaterial()
+        m.baseColor = .init(tint: color.withAlphaComponent(highlighted ? 0.52 : 0.30))
+        m.roughness = .init(floatLiteral: 0.05)
+        m.metallic = .init(floatLiteral: 0.0)
+        m.blending = .transparent(opacity: .init(floatLiteral: 0.45))
+        m.clearcoat = .init(floatLiteral: 1.0)
+        m.clearcoatRoughness = .init(floatLiteral: 0.0)
+        m.emissiveColor = .init(color: color)
+        m.emissiveIntensity = highlighted ? 4.5 : 1.5
+        return m
+    }
+
+    private func makeGazeCursorEntity() -> ModelEntity {
+        var material = UnlitMaterial()
+        material.color = .init(tint: UIColor.white.withAlphaComponent(0.95))
+        return ModelEntity(mesh: .generateSphere(radius: 0.018), materials: [material])
+    }
+
+    private func makeHoldMarkerEntity() -> ModelEntity {
+        var material = UnlitMaterial()
+        material.color = .init(tint: UIColor.white.withAlphaComponent(0.65))
+        let entity = ModelEntity(mesh: .generateSphere(radius: 0.035), materials: [material])
+        entity.scale = SIMD3<Float>(1.25, 0.10, 1.25)
+        return entity
+    }
+
+    private func makeCursorMaterial(for bubble: Bubble) -> UnlitMaterial {
+        var m = UnlitMaterial()
+        m.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.95))
+        return m
+    }
+
+    private func makeMarkerMaterial(for bubble: Bubble) -> UnlitMaterial {
+        var m = UnlitMaterial()
+        m.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.62))
+        return m
     }
 
     private func updateGazeCursorAndMarker(
-        in root: Entity,
         result: GazeTargetResult?,
         isVisible: Bool
     ) {
@@ -910,137 +893,23 @@ struct ImmersiveView: View {
                 target.position.y - appModel.gameController.stageConfig.bubbleRadius - 0.026,
                 target.position.z
             )
-
-            let baseScale: Float = 1.25
-            let progressScale = baseScale + result.holdProgress * 0.75
+            let progressScale: Float = 1.25 + result.holdProgress * 0.75
             marker.scale = SIMD3<Float>(progressScale, 0.10, progressScale)
-
             marker.isEnabled = true
             cursor.model?.materials = [makeCursorMaterial(for: target)]
             marker.model?.materials = [makeMarkerMaterial(for: target)]
         } else {
             marker.isEnabled = false
-
-            var material = UnlitMaterial()
-            material.color = .init(tint: UIColor.white.withAlphaComponent(0.85))
-            cursor.model?.materials = [material]
+            var m = UnlitMaterial()
+            m.color = .init(tint: UIColor.white.withAlphaComponent(0.85))
+            cursor.model?.materials = [m]
         }
     }
 
-    @MainActor
-    private func triggerSessionStart() {
-        guard appModel.gameController.sessionState == .ready else { return }
+    private func syncBubbles(in root: Entity, with bubbles: [Bubble], highlightedID: UUID?) {
+        let activeIDs = Set(bubbles.filter { !$0.isGone }.map { $0.id })
 
-        startHoverBeganAt = nil
-        startTargetHighlighted = false
-        appModel.gameController.startSession()
-    }
-
-    private func makeBubbleEntity(for bubble: Bubble, highlighted: Bool = false) -> ModelEntity {
-        let radius = appModel.gameController.stageConfig.bubbleRadius
-
-        let entity = ModelEntity(
-            mesh: .generateSphere(radius: radius),
-            materials: [makeBubbleMaterial(color: bubble.type.uiColor, highlighted: highlighted)]
-        )
-
-        entity.name = "Bubble_\(bubble.id.uuidString)"
-        entity.position = bubble.position
-        entity.scale = SIMD3<Float>(repeating: highlighted ? 1.18 : 1.0)
-        entity.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: radius)]
-        ))
-        entity.components.set(InputTargetComponent())
-        entity.components.set(HoverEffectComponent())
-
-        return entity
-    }
-
-    private func makeBubbleMaterial(color: UIColor, highlighted: Bool = false) -> PhysicallyBasedMaterial {
-        var material = PhysicallyBasedMaterial()
-
-        material.baseColor =
-            PhysicallyBasedMaterial.BaseColor(
-                tint: color.withAlphaComponent(highlighted ? 0.52 : 0.30)
-            )
-
-        material.roughness =
-            PhysicallyBasedMaterial.Roughness(floatLiteral: 0.05)
-
-        material.metallic =
-            PhysicallyBasedMaterial.Metallic(floatLiteral: 0.0)
-
-        material.blending =
-            .transparent(opacity: .init(floatLiteral: 0.45))
-
-        material.clearcoat =
-            PhysicallyBasedMaterial.Clearcoat(floatLiteral: 1.0)
-
-        material.clearcoatRoughness =
-            PhysicallyBasedMaterial.ClearcoatRoughness(floatLiteral: 0.0)
-
-        material.emissiveColor =
-            PhysicallyBasedMaterial.EmissiveColor(color: color)
-
-        material.emissiveIntensity = highlighted ? 4.5 : 1.5
-
-        return material
-    }
-
-    private func makeGazeCursorEntity() -> ModelEntity {
-        var material = UnlitMaterial()
-        material.color = .init(tint: UIColor.white.withAlphaComponent(0.95))
-
-        let entity = ModelEntity(
-            mesh: .generateSphere(radius: 0.018),
-            materials: [material]
-        )
-
-        return entity
-    }
-
-    private func makeHoldMarkerEntity() -> ModelEntity {
-        var material = UnlitMaterial()
-        material.color = .init(tint: UIColor.white.withAlphaComponent(0.65))
-
-        let entity = ModelEntity(
-            mesh: .generateSphere(radius: 0.035),
-            materials: [material]
-        )
-
-        entity.scale = SIMD3<Float>(1.25, 0.10, 1.25)
-
-        return entity
-    }
-
-    private func makeCursorMaterial(for bubble: Bubble) -> UnlitMaterial {
-        var material = UnlitMaterial()
-        material.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.95))
-        return material
-    }
-
-    private func makeMarkerMaterial(for bubble: Bubble) -> UnlitMaterial {
-        var material = UnlitMaterial()
-        material.color = .init(tint: bubble.type.uiColor.withAlphaComponent(0.62))
-        return material
-    }
-
-    private func syncBubbles(
-        in root: Entity,
-        with bubbles: [Bubble],
-        highlightedID: UUID?
-    ) {
-        let activeIDs = Set(
-            bubbles
-                .filter { !$0.isGone }
-                .map { $0.id }
-        )
-
-        let goneIDs = bubbleStore.entities.keys.filter {
-            !activeIDs.contains($0)
-        }
-
-        for id in goneIDs {
+        for id in bubbleStore.entities.keys where !activeIDs.contains(id) {
             bubbleStore.entities[id]?.removeFromParent()
             bubbleStore.entities.removeValue(forKey: id)
         }
@@ -1051,12 +920,7 @@ struct ImmersiveView: View {
             if let entity = bubbleStore.entities[bubble.id] {
                 entity.position = bubble.position
                 entity.scale = SIMD3<Float>(repeating: isHighlighted ? 1.18 : 1.0)
-                entity.model?.materials = [
-                    makeBubbleMaterial(
-                        color: bubble.type.uiColor,
-                        highlighted: isHighlighted
-                    )
-                ]
+                entity.model?.materials = [makeBubbleMaterial(color: bubble.type.uiColor, highlighted: isHighlighted)]
             } else {
                 let entity = makeBubbleEntity(for: bubble, highlighted: isHighlighted)
                 root.addChild(entity)
@@ -1070,116 +934,57 @@ struct ImmersiveView: View {
         bubbleStore.entities.removeAll()
     }
 
-    private func makeStartOrbEntity(
-        name: String,
-        position: SIMD3<Float>,
-        highlighted: Bool
-    ) -> ModelEntity {
-        var material = PhysicallyBasedMaterial()
-
-        material.baseColor = .init(
-            tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple)
-                .withAlphaComponent(0.95)
-        )
-
-        material.emissiveColor = .init(
-            color: highlighted ? .white : .systemPink
-        )
-
-        let entity = ModelEntity(
-            mesh: .generateSphere(radius: highlighted ? 0.055 : 0.045),
-            materials: [material]
-        )
-
+    private func makeStartOrbEntity(name: String, position: SIMD3<Float>, highlighted: Bool) -> ModelEntity {
+        var m = PhysicallyBasedMaterial()
+        m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
+        m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
+        let entity = ModelEntity(mesh: .generateSphere(radius: highlighted ? 0.055 : 0.045), materials: [m])
         entity.name = name
         entity.position = position
-        entity.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.06)]
-        ))
+        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.06)]))
         entity.components.set(InputTargetComponent())
-
         return entity
     }
 
     private func makeStarField(count: Int, radius: Float) -> Entity {
         let root = Entity()
-
         for _ in 0..<count {
             let theta = Float.random(in: 0...(2 * .pi))
             let phi = acos(Float.random(in: -1...1))
             let r = radius * Float.random(in: 0.85...1.0)
-
-            let x = r * sin(phi) * cos(theta)
-            let y = r * sin(phi) * sin(theta)
-            let z = r * cos(phi)
-
             let size = Float.random(in: 0.01...0.04)
             let brightness = Float.random(in: 0.5...1.0)
 
-            var material = UnlitMaterial()
+            var m = UnlitMaterial()
             let roll = Int.random(in: 0...100)
-
             if roll < 5 {
-                material.color = .init(
-                    tint: UIColor(
-                        red: 0.7,
-                        green: 0.85,
-                        blue: 1.0,
-                        alpha: CGFloat(brightness)
-                    )
-                )
+                m.color = .init(tint: UIColor(red: 0.7, green: 0.85, blue: 1.0, alpha: CGFloat(brightness)))
             } else if roll < 8 {
-                material.color = .init(
-                    tint: UIColor(
-                        red: 1.0,
-                        green: 0.9,
-                        blue: 0.7,
-                        alpha: CGFloat(brightness)
-                    )
-                )
+                m.color = .init(tint: UIColor(red: 1.0, green: 0.9, blue: 0.7, alpha: CGFloat(brightness)))
             } else {
-                material.color = .init(
-                    tint: UIColor(
-                        white: CGFloat(brightness),
-                        alpha: 1.0
-                    )
-                )
+                m.color = .init(tint: UIColor(white: CGFloat(brightness), alpha: 1.0))
             }
 
-            let star = ModelEntity(
-                mesh: .generateSphere(radius: size),
-                materials: [material]
+            let star = ModelEntity(mesh: .generateSphere(radius: size), materials: [m])
+            star.position = SIMD3<Float>(
+                r * sin(phi) * cos(theta),
+                r * sin(phi) * sin(theta),
+                r * cos(phi)
             )
-
-            star.position = SIMD3<Float>(x, y, z)
             root.addChild(star)
         }
-
         return root
     }
 
-    private func updateStartOrbAppearance(
-        _ entity: ModelEntity,
-        highlighted: Bool,
-        visible: Bool
-    ) {
+    private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
         entity.scale = visible
-            ? (highlighted
-               ? SIMD3<Float>(repeating: 1.18)
-               : SIMD3<Float>(repeating: 1.0))
+            ? SIMD3<Float>(repeating: highlighted ? 1.18 : 1.0)
             : SIMD3<Float>(repeating: 0.001)
 
-        if var material = entity.model?.materials.first as? PhysicallyBasedMaterial {
-            material.baseColor = .init(
-                tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple)
-                    .withAlphaComponent(0.95)
-            )
-
-            material.emissiveColor = .init(
-                color: highlighted ? .white : .systemPink
-            )
-
-            entity.model?.materials = [material]
+        if var m = entity.model?.materials.first as? PhysicallyBasedMaterial {
+            m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
+            m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
+            entity.model?.materials = [m]
         }
     }
 }
