@@ -5,26 +5,22 @@ private let accent = DS.teal
 // MARK: - Tabs
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, debug, immersive, eeg, about
+    case debug, immersive, about
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .general:   return "General"
         case .debug:     return "Debug"
         case .immersive: return "Immersive"
-        case .eeg:       return "EEG & BCI"
         case .about:     return "About"
         }
     }
 
     var icon: String {
         switch self {
-        case .general:   return "◎"
         case .debug:     return "⬡"
         case .immersive: return "✦"
-        case .eeg:       return "◈"
         case .about:     return "◇"
         }
     }
@@ -34,32 +30,13 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
 
 @Observable
 private final class SettingsState {
-    // General
-    var uiOpacity: Double = 80
-    var accentChoice: String = "teal"
-    var reduceMotion: Bool = false
-    var sfx: Bool = true
-    var sfxVol: Double = 70
-    var haptic: Bool = true
-    var autoSave: Bool = true
-    var lang: String = "en"
-
     // Debug (note: debugMode lives on AppModel so it can be observed across views)
     var autoPlayJson: Bool = false
     var loopJson: Bool = false
 
     // Immersive (note: `environment` lives on AppModel)
-    var envBrightness: Double = 65
-    var depthEffect: Bool = true
-    var passthroughBlend: Double = 30
     var hudPos: String = "top"
     var hudScale: String = "md"
-
-    // EEG
-    var autoReconnect: Bool = true
-    var signalThreshold: String = "mid"
-    var armChoice: String = "right"
-    var sensitivity: Double = 70
 }
 
 // MARK: - Main view
@@ -67,49 +44,20 @@ private final class SettingsState {
 struct SettingsView: View {
     let onBack: () -> Void
 
-    @State private var selectedTab: SettingsTab = .general
+    @State private var selectedTab: SettingsTab = .debug
     @State private var settings = SettingsState()
 
     var body: some View {
-        ZStack {
-            ambientBackground
+        VStack(spacing: 14) {
+            header
 
-            VStack(spacing: 14) {
-                header
-
-                HStack(alignment: .top, spacing: 14) {
-                    sidebar.frame(width: 200)
-                    contentArea
-                }
+            HStack(alignment: .top, spacing: 14) {
+                sidebar.frame(width: 200)
+                contentArea
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
         }
-    }
-
-    // MARK: Background
-
-    private var ambientBackground: some View {
-        ZStack {
-            RadialGradient(
-                colors: [Color(hex: 0x0d1a2e), DS.bgBase],
-                center: .init(x: 0.5, y: 0.35),
-                startRadius: 0,
-                endRadius: 800
-            )
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [accent.opacity(0.07), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 300
-                    )
-                )
-                .frame(width: 600, height: 600)
-                .blur(radius: 30)
-        }
-        .ignoresSafeArea()
+        .padding(.horizontal, 22)
+        .padding(.vertical, 18)
     }
 
     // MARK: Header
@@ -212,10 +160,8 @@ struct SettingsView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 Group {
                     switch selectedTab {
-                    case .general:   GeneralPanel(s: settings)
                     case .debug:     DebugPanel(s: settings)
                     case .immersive: ImmersivePanel(s: settings)
-                    case .eeg:       EEGPanel(s: settings)
                     case .about:     AboutPanel()
                     }
                 }
@@ -438,55 +384,6 @@ private struct SectionCard<Content: View>: View {
 
 // MARK: - Panels
 
-private struct GeneralPanel: View {
-    @Bindable var s: SettingsState
-
-    var body: some View {
-        VStack(spacing: 12) {
-            SectionCard(title: "Display") {
-                SettingRowView(icon: "◐", label: "UI Opacity", desc: "Overall interface transparency") {
-                    SettingSlider(value: $s.uiOpacity)
-                }
-                SettingRowView(icon: "✦", label: "Accent Color", desc: "Primary highlight color") {
-                    ChipGroupView(value: $s.accentChoice, options: [
-                        .init(value: "teal", label: "Teal"),
-                        .init(value: "purple", label: "Purple"),
-                        .init(value: "blue", label: "Blue")
-                    ])
-                }
-                SettingRowView(icon: "☾", label: "Reduce Motion", desc: "Minimize animations and transitions", divider: false) {
-                    ToggleSwitch(value: $s.reduceMotion)
-                }
-            }
-
-            SectionCard(title: "Audio") {
-                SettingRowView(icon: "♪", label: "Sound Effects", desc: "In-game pop and ambient sounds") {
-                    ToggleSwitch(value: $s.sfx)
-                }
-                SettingRowView(icon: "♫", label: "SFX Volume", desc: s.sfx ? "Active" : "Muted") {
-                    SettingSlider(value: $s.sfxVol)
-                }
-                SettingRowView(icon: "〜", label: "Haptic Feedback", desc: "Controller vibration", divider: false) {
-                    ToggleSwitch(value: $s.haptic)
-                }
-            }
-
-            SectionCard(title: "Session") {
-                SettingRowView(icon: "⊕", label: "Auto-Save Progress", desc: "Sync after each stage") {
-                    ToggleSwitch(value: $s.autoSave)
-                }
-                SettingRowView(icon: "◎", label: "Session Language", desc: "Display language", divider: false) {
-                    ChipGroupView(value: $s.lang, options: [
-                        .init(value: "en", label: "EN"),
-                        .init(value: "ko", label: "KO"),
-                        .init(value: "ja", label: "JA")
-                    ])
-                }
-            }
-        }
-    }
-}
-
 private struct DebugPanel: View {
     @Bindable var s: SettingsState
     @Environment(AppModel.self) private var appModel
@@ -675,18 +572,6 @@ private struct ImmersivePanel: View {
                 }
             }
 
-            SectionCard(title: "View Options") {
-                SettingRowView(icon: "◐", label: "Environment Brightness", desc: "Adjust background luminosity") {
-                    SettingSlider(value: $s.envBrightness)
-                }
-                SettingRowView(icon: "〜", label: "Depth Effect", desc: "Parallax depth on bubble layers") {
-                    ToggleSwitch(value: $s.depthEffect)
-                }
-                SettingRowView(icon: "✦", label: "Passthrough Blend", desc: "Mix real world with virtual environment", divider: false) {
-                    SettingSlider(value: $s.passthroughBlend)
-                }
-            }
-
             SectionCard(title: "Window Layout") {
                 SettingRowView(icon: "⊹", label: "HUD Position", desc: "Floating overlay alignment") {
                     ChipGroupView(value: $s.hudPos, options: [
@@ -759,109 +644,6 @@ private struct ImmersivePanel: View {
     }
 }
 
-private struct EEGPanel: View {
-    @Bindable var s: SettingsState
-
-    var body: some View {
-        VStack(spacing: 12) {
-            SectionCard(title: "EEG Connection") {
-                signalMeter
-                    .padding(.bottom, 4)
-
-                SettingRowView(icon: "◈", label: "Auto-Reconnect", desc: "Reconnect EEG on signal loss") {
-                    ToggleSwitch(value: $s.autoReconnect)
-                }
-                SettingRowView(icon: "⊕", label: "Signal Threshold", desc: "Minimum quality to start session", divider: false) {
-                    ChipGroupView(value: $s.signalThreshold, options: [
-                        .init(value: "low", label: "Low"),
-                        .init(value: "mid", label: "Med"),
-                        .init(value: "high", label: "High")
-                    ])
-                }
-            }
-
-            SectionCard(title: "Intent Detection") {
-                SettingRowView(icon: "⬡", label: "Active Arm", desc: "Which prosthetic to control") {
-                    ChipGroupView(value: $s.armChoice, options: [
-                        .init(value: "left", label: "Left"),
-                        .init(value: "right", label: "Right")
-                    ])
-                }
-                SettingRowView(icon: "◎", label: "Intent Sensitivity", desc: "Brain signal detection threshold") {
-                    SettingSlider(value: $s.sensitivity, range: 10...100)
-                }
-                SettingRowView(icon: "✦", label: "Calibration Mode", desc: "Run baseline EEG calibration", divider: false) {
-                    Button("Calibrate") {}
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(accent.opacity(0.4), lineWidth: 1)
-                        )
-                        .foregroundStyle(accent)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                }
-            }
-        }
-    }
-
-    private var signalMeter: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Signal Quality")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(DS.textTertiary)
-                Spacer()
-                Text("87% — Good")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(accent)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.08)).frame(height: 5)
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [accent, accent.opacity(0.6)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * 0.87, height: 5)
-                }
-            }
-            .frame(height: 5)
-
-            HStack {
-                ForEach(Array(zip(["Alpha", "Beta", "Theta", "Delta"], [0.72, 0.45, 0.38, 0.20])), id: \.0) { (name, fill) in
-                    VStack(spacing: 4) {
-                        Text(name)
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(DS.textTertiary)
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.06)).frame(width: 36, height: 4)
-                            Capsule().fill(accent.opacity(0.7)).frame(width: 36 * fill, height: 4)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.top, 4)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.innerBg, in: RoundedRectangle(cornerRadius: DS.radiusMd))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.radiusMd)
-                .strokeBorder(DS.innerBorder, lineWidth: 1)
-        )
-    }
-}
-
 private struct AboutPanel: View {
     var body: some View {
         VStack(spacing: 12) {
@@ -904,12 +686,6 @@ private struct AboutPanel: View {
                 aboutRow("Platform", "visionOS / RealityKit", divider: true)
                 aboutRow("Input", "EEG BCI Interface", divider: false)
             }
-
-            SectionCard(title: "Legal") {
-                legalRow("Privacy Policy", divider: true)
-                legalRow("Terms of Use", divider: true)
-                legalRow("Open Source Licenses", divider: false)
-            }
         }
     }
 
@@ -925,26 +701,6 @@ private struct AboutPanel: View {
                     .foregroundStyle(DS.textPrimary)
             }
             .padding(.vertical, 9)
-
-            if divider {
-                Divider().background(Color.white.opacity(0.05))
-            }
-        }
-    }
-
-    private func legalRow(_ label: String, divider: Bool) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(DS.textSecondary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(DS.textTertiary)
-            }
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
 
             if divider {
                 Divider().background(Color.white.opacity(0.05))
