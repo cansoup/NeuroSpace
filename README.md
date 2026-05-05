@@ -31,7 +31,7 @@ NeuroSpace is a **visionOS** app for Apple Vision Pro that enables upper-limb am
    ```bash
    git clone https://github.com/cansoup/VisionStudio_team5.git
    ```
-2. Open `Neurospace-Team5.xcodeproj` in **Xcode 16** or later.
+2. Open `NeuroSpace.xcodeproj` in **Xcode 16** or later.
 3. Select the **visionOS Simulator** target (or a connected Apple Vision Pro).
 4. Build and run (`Cmd+R`).
 
