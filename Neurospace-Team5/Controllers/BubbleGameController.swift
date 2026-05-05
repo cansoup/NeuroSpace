@@ -608,51 +608,73 @@ final class BubbleGameController {
         let panelCenter = SIMD3<Float>(0.34, 0.18, 0.02)
         let panelHalfExtent = SIMD3<Float>(0.18, 0.13, 0.06)
 
+        // Multi-pass placement: try strictest constraints first, then relax
+        // progressively if we can't place all the configured bubbles. This
+        // guarantees stage 1 always renders its full bubbleCount, even when
+        // the panel keep-out and tight axis ranges leave very little room.
         var positions: [SIMD3<Float>] = []
-        var tries = 0
 
-        while positions.count < config.bubbleCount && tries < 1200 {
-            tries += 1
+        func attempt(maxTries: Int, applyPanelKeepOut: Bool, applyMinDistance: Bool) {
+            var tries = 0
+            while positions.count < config.bubbleCount && tries < maxTries {
+                tries += 1
 
-            let candidate = SIMD3<Float>(
-                Float.random(in: xRange),
-                Float.random(in: yRange),
-                Float.random(in: zRange)
-            )
+                let candidate = SIMD3<Float>(
+                    Float.random(in: xRange),
+                    Float.random(in: yRange),
+                    Float.random(in: zRange)
+                )
 
-            // Only exclude the upper-center area (around the player's face),
-            // not the entire mid-body column. Stage 1's bubbles sit at y ≈ 0.10
-            // (below the face), so they should be allowed at center x.
-            let tooCloseToCenter =
-                abs(candidate.x) < centerExclusionX &&
-                candidate.y > 0.18 &&
-                abs(candidate.z) < centerExclusionZ
+                // Center / face keep-out (only fires for upper y values)
+                let tooCloseToCenter =
+                    abs(candidate.x) < centerExclusionX &&
+                    candidate.y > 0.18 &&
+                    abs(candidate.z) < centerExclusionZ
+                if tooCloseToCenter { continue }
 
-            if tooCloseToCenter {
-                continue
+                // Panel keep-out (best-effort)
+                if applyPanelKeepOut {
+                    let dx = abs(candidate.x - panelCenter.x)
+                    let dy = abs(candidate.y - panelCenter.y)
+                    let dz = abs(candidate.z - panelCenter.z)
+                    if dx < panelHalfExtent.x + config.bubbleRadius &&
+                       dy < panelHalfExtent.y + config.bubbleRadius &&
+                       dz < panelHalfExtent.z + config.bubbleRadius {
+                        continue
+                    }
+                }
+
+                // Tip safety (always enforced — bubbles must not spawn on the
+                // player's resting hand position)
+                if simd_distance(candidate, rightTipStart) < safeRadius ||
+                   simd_distance(candidate, leftTipStart) < safeRadius {
+                    continue
+                }
+
+                // Inter-bubble minimum distance (best-effort)
+                if applyMinDistance,
+                   positions.contains(where: { simd_distance($0, candidate) < minDistance }) {
+                    continue
+                }
+
+                positions.append(candidate)
             }
+        }
 
-            // Reject any candidate whose bubble (with its own radius) would
-            // visually overlap the stage-info panel keep-out box.
-            let dx = abs(candidate.x - panelCenter.x)
-            let dy = abs(candidate.y - panelCenter.y)
-            let dz = abs(candidate.z - panelCenter.z)
-            if dx < panelHalfExtent.x + config.bubbleRadius &&
-               dy < panelHalfExtent.y + config.bubbleRadius &&
-               dz < panelHalfExtent.z + config.bubbleRadius {
-                continue
-            }
+        // Pass 1 — full constraints
+        attempt(maxTries: 1200, applyPanelKeepOut: true, applyMinDistance: true)
 
-            if simd_distance(candidate, rightTipStart) < safeRadius ||
-               simd_distance(candidate, leftTipStart) < safeRadius {
-                continue
-            }
+        // Pass 2 — drop panel keep-out so a tightly-constrained stage can still
+        // satisfy bubbleCount even if a few bubbles end up over the panel area
+        if positions.count < config.bubbleCount {
+            attempt(maxTries: 600, applyPanelKeepOut: false, applyMinDistance: true)
+        }
 
-            if positions.contains(where: { simd_distance($0, candidate) < minDistance }) {
-                continue
-            }
-
-            positions.append(candidate)
+        // Pass 3 — last-resort fallback: also drop minimum-distance check.
+        // This may produce visually overlapping spheres, but only triggers in
+        // pathologically tight stages we'd otherwise undershoot on.
+        if positions.count < config.bubbleCount {
+            attempt(maxTries: 300, applyPanelKeepOut: false, applyMinDistance: false)
         }
 
         return positions.map { position in

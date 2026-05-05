@@ -23,13 +23,15 @@ struct Neurospace_Team5App: App {
             CongratsView()
                 .environment(appModel)
         }
-        .defaultSize(width: 400, height: 300)
+        .defaultSize(width: 460, height: 560)
+        .windowResizability(.contentSize)
 
         WindowGroup(id: appModel.missionFailedWindowID) {
             MissionFailedView()
                 .environment(appModel)
         }
-        .defaultSize(width: 400, height: 320)
+        .defaultSize(width: 460, height: 560)
+        .windowResizability(.contentSize)
 
         ImmersiveSpace(id: appModel.lobbySkyboxID) {
             LobbySkyboxView()

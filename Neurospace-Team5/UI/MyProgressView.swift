@@ -124,29 +124,25 @@ struct MyProgressView: View {
     }
 
     var body: some View {
-        ZStack {
-            ambientBackground
+        VStack(spacing: 14) {
+            header
 
-            VStack(spacing: 14) {
-                header
+            HStack(alignment: .top, spacing: 14) {
+                leftRail.frame(width: 320)
 
-                HStack(alignment: .top, spacing: 14) {
-                    leftRail.frame(width: 320)
-
-                    ScrollView(.vertical, showsIndicators: false) {
-                        if let s = selected {
-                            SessionDetailPanel(session: s)
-                                .id(s.id)
-                        } else {
-                            emptyDetail
-                        }
+                ScrollView(.vertical, showsIndicators: false) {
+                    if let s = selected {
+                        SessionDetailPanel(session: s)
+                            .id(s.id)
+                    } else {
+                        emptyDetail
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
         }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 18)
         .onAppear {
             if selectedId == nil { selectedId = sessions.first?.id }
         }
@@ -168,32 +164,6 @@ struct MyProgressView: View {
                 .foregroundStyle(DS.textTertiary)
         }
         .frame(maxWidth: .infinity, minHeight: 320)
-    }
-
-    // MARK: - Background
-
-    private var ambientBackground: some View {
-        ZStack {
-            RadialGradient(
-                colors: [Color(hex: 0x0d1a2e), DS.bgBase],
-                center: .init(x: 0.5, y: 0.35),
-                startRadius: 0,
-                endRadius: 800
-            )
-
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [accent.opacity(0.07), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 300
-                    )
-                )
-                .frame(width: 600, height: 600)
-                .blur(radius: 30)
-        }
-        .ignoresSafeArea()
     }
 
     // MARK: - Header

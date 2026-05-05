@@ -26,7 +26,7 @@ final class AppModel {
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
     var shouldEndSession = false
-    var debugMode: Bool = false
+    var debugMode: Bool = true
     var selectedEnvironment: EnvironmentChoice = .deepSpace
 
     var gameController = BubbleGameController()
