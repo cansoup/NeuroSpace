@@ -30,7 +30,8 @@ struct Neurospace_Team5App: App {
             MissionFailedView()
                 .environment(appModel)
         }
-        .defaultSize(width: 400, height: 320)
+        .defaultSize(width: 460, height: 560)
+        .windowResizability(.contentSize)
 
         ImmersiveSpace(id: appModel.lobbySkyboxID) {
             LobbySkyboxView()
