@@ -82,4 +82,11 @@ NeuroSpace is a **visionOS** app for Apple Vision Pro that enables upper-limb am
 
 ## 🙌 Credits
 
-Built by **vOS Team 5**
+- Built by **visionOS Team 5**
+- Tools used: OpenBCI, LabRecorder, and XDFStreamer
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
