@@ -1,5 +1,5 @@
 //
-//  Neurospace_Team5App.swift
+//  NeuroSpaceApp.swift
 //  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 16/3/2026.
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct Neurospace_Team5App: App {
+struct NeuroSpaceApp: App {
 
     @State private var appModel = AppModel()
 
