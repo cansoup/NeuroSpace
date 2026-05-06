@@ -16,14 +16,14 @@
 			containerPortal = 579989FE2F67A23100C7005F /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 57998A052F67A23100C7005F;
-			remoteInfo = "NeuroSpace";
+			remoteInfo = NeuroSpace;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		57998A062F67A23100C7005F /* NeuroSpace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NeuroSpace.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		57998A062F67A23100C7005F /* NeuroSpace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeuroSpace.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57998A0A2F67A23100C7005F /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
-		57998A1A2F67A23200C7005F /* NeuroSpaceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "NeuroSpaceTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		57998A1A2F67A23200C7005F /* NeuroSpaceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeuroSpaceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -42,12 +42,7 @@
 			exceptions = (
 				57998A202F67A23200C7005F /* Exceptions for "NeuroSpace" folder in "NeuroSpace" target */,
 			);
-			path = "NeuroSpace";
-			sourceTree = "<group>";
-		};
-		57998A1D2F67A23200C7005F /* NeuroSpaceTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "NeuroSpaceTests";
+			path = NeuroSpace;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -76,7 +71,6 @@
 			children = (
 				57998A082F67A23100C7005F /* NeuroSpace */,
 				57998A092F67A23100C7005F /* Packages */,
-				57998A1D2F67A23200C7005F /* NeuroSpaceTests */,
 				57998A072F67A23100C7005F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -116,11 +110,11 @@
 			fileSystemSynchronizedGroups = (
 				57998A082F67A23100C7005F /* NeuroSpace */,
 			);
-			name = "NeuroSpace";
+			name = NeuroSpace;
 			packageProductDependencies = (
 				57998A0B2F67A23100C7005F /* RealityKitContent */,
 			);
-			productName = "NeuroSpace";
+			productName = NeuroSpace;
 			productReference = 57998A062F67A23100C7005F /* NeuroSpace.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -137,13 +131,10 @@
 			dependencies = (
 				57998A1C2F67A23200C7005F /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				57998A1D2F67A23200C7005F /* NeuroSpaceTests */,
-			);
-			name = "NeuroSpaceTests";
+			name = NeuroSpaceTests;
 			packageProductDependencies = (
 			);
-			productName = "NeuroSpaceTests";
+			productName = NeuroSpaceTests;
 			productReference = 57998A1A2F67A23200C7005F /* NeuroSpaceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -245,7 +236,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpace";
+				PRODUCT_BUNDLE_IDENTIFIER = NeuroSpace.NeuroSpace;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -274,7 +265,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpace";
+				PRODUCT_BUNDLE_IDENTIFIER = NeuroSpace.NeuroSpace;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -417,7 +408,7 @@
 				DEVELOPMENT_TEAM = 74G9LBNBXV;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpaceTests";
+				PRODUCT_BUNDLE_IDENTIFIER = NeuroSpace.NeuroSpaceTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -440,7 +431,7 @@
 				DEVELOPMENT_TEAM = 74G9LBNBXV;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpaceTests";
+				PRODUCT_BUNDLE_IDENTIFIER = NeuroSpace.NeuroSpaceTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
