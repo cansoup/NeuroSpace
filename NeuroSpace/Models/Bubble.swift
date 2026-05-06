@@ -1,11 +1,11 @@
 //
 //  Bubble.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 
 //
 //  Bubble.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 
 import Foundation

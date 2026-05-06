@@ -1,6 +1,6 @@
 //
 //  BCIArmMapper.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 31/3/2026.
 //

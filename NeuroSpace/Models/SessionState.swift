@@ -1,6 +1,6 @@
 //
 //  SessionState.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 16/3/2026.
 //This will tell the app what phase the user is in i.e. whether the user is in the painting phase or doign something else

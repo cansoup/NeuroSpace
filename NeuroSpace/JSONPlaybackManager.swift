@@ -1,6 +1,6 @@
 //
 //  JSONPlaybackManager.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 
 import Foundation

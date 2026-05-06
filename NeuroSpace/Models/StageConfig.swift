@@ -1,6 +1,6 @@
 //
 //  StageConfig.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Defines the parameters and unlock criteria for each rehabilitation stage.
 //

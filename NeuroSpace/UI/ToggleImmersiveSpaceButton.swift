@@ -1,6 +1,6 @@
 //
 //  ToggleImmersiveSpaceButton.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 16/3/2026.
 //

@@ -1,6 +1,6 @@
 //
 //  BCIControlMessage.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 5/4/2026.
 //

@@ -1,6 +1,6 @@
 //
 //  ScoreManager.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 26/3/2026.
 //

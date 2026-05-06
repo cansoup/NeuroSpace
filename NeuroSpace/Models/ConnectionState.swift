@@ -1,6 +1,6 @@
 //
 //  ConnectionState.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 //  Created by Shaiyan Haseen Khan on 16/3/2026.
 //This will define the connection status between the BCI headset and the app

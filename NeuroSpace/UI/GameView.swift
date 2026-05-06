@@ -1,6 +1,6 @@
 //
 //  GameView.swift
-//  Neurospace-Team5
+//  NeuroSpace
 //
 
 import SwiftUI
