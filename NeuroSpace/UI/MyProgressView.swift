@@ -1,4 +1,6 @@
+import Foundation
 import SwiftUI
+
 
 private let accent = DS.teal
 
@@ -459,6 +461,14 @@ private struct SessionRow: View {
     let session: ProgressSession
     let isSelected: Bool
 
+    private var displayNumberText: String {
+        String(format: "%02d", session.displayNumber)
+    }
+
+    private var sessionMetaText: String {
+        "\(session.time) · \(session.arm) arm"
+    }
+
     private var stageColor: Color {
         if session.stage >= 5 { return DS.teal }
         if session.stage >= 3 { return DS.bubbleBlue }
@@ -474,44 +484,13 @@ private struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(String(format: "%02d", session.displayNumber))
-                .font(DS.fontSmall)
-                .fontWeight(.bold)
-                .foregroundStyle(isSelected ? accent : DS.textTertiary)
-                .frame(width: 28, height: 28)
-                .background(
-                    isSelected ? accent.opacity(0.18) : Color.white.opacity(0.06),
-                    in: RoundedRectangle(cornerRadius: 8)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            isSelected ? accent.opacity(0.4) : Color.white.opacity(0.08),
-                            lineWidth: 1
-                        )
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(dateText)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(isSelected ? accent : DS.textPrimary)
-                Text("\(session.time) · \(session.arm) arm")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(DS.textTertiary)
-            }
+            numberBadge
+            sessionText
 
             Spacer(minLength: 4)
 
             StageBadge(stage: session.stage, total: session.totalStages)
-
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(session.duration)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(stageColor)
-                Text("duration")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(DS.textTertiary)
-            }
+            durationText
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .semibold))
@@ -533,6 +512,44 @@ private struct SessionRow: View {
         .offset(x: isSelected ? -4 : 0)
         .animation(.easeInOut(duration: 0.2), value: isSelected)
         .contentShape(Rectangle())
+    }
+
+    private var numberBadge: some View {
+        let fill = isSelected ? accent.opacity(0.18) : Color.white.opacity(0.06)
+        let stroke = isSelected ? accent.opacity(0.4) : Color.white.opacity(0.08)
+
+        return Text(displayNumberText)
+            .font(DS.fontSmall)
+            .fontWeight(.bold)
+            .foregroundStyle(isSelected ? accent : DS.textTertiary)
+            .frame(width: 28, height: 28)
+            .background(fill, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(stroke, lineWidth: 1)
+            )
+    }
+
+    private var sessionText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(dateText)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(isSelected ? accent : DS.textPrimary)
+            Text(sessionMetaText)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(DS.textTertiary)
+        }
+    }
+
+    private var durationText: some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(session.duration)
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundStyle(stageColor)
+            Text("duration")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(DS.textTertiary)
+        }
     }
 }
 

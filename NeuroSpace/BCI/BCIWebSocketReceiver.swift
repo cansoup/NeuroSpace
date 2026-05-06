@@ -179,16 +179,15 @@ final class BCIWebSocketClient {
         switch prediction.predictedClass {
         case .left:
             appendLog("Prediction LEFT → left arm")
-            sendPredictionControlMessage(activeArm: .left, confidence: prediction.confidence)
+            sendPredictionControlMessage(prediction.predictedClass)
 
         case .right:
             appendLog("Prediction RIGHT → right arm")
-            sendPredictionControlMessage(activeArm: .right, confidence: prediction.confidence)
+            sendPredictionControlMessage(prediction.predictedClass)
 
         case .both:
             appendLog("Prediction BOTH → both-arm intent")
-            sendPredictionControlMessage(activeArm: .left, confidence: prediction.confidence)
-            sendPredictionControlMessage(activeArm: .right, confidence: prediction.confidence)
+            sendPredictionControlMessage(prediction.predictedClass)
         }
     }
 
@@ -245,20 +244,9 @@ final class BCIWebSocketClient {
         }
     }
 
-    private func sendPredictionControlMessage(activeArm: ActiveArm, confidence: Double) {
-        let x: Float = activeArm == .left ? -moveMagnitude : moveMagnitude
-
-        let message = BCIControlMessage(
-            timestamp: Date().timeIntervalSince1970,
-            activeArm: activeArm,
-            moveX: x,
-            moveY: 0,
-            moveZ: -0.25,
-            confidence: Float(confidence)
-        )
-
+    private func sendPredictionControlMessage(_ prediction: PredictedClass) {
         Task { @MainActor in
-            self.armMapper?.handleControlMessage(message)
+            self.armMapper?.handlePredictionClass(prediction)
         }
     }
 

@@ -22,7 +22,8 @@ let package = Package(
             name: "RealityKitContent",
             dependencies: [],
             resources: [
-                .process("RealityKitContent.rkassets")
+                .process("RealityKitContent.rkassets"),
+                .process("lefthandpoint.usdz")
             ],
             swiftSettings: [
                 .enableUpcomingFeature("MemberImportVisibility")

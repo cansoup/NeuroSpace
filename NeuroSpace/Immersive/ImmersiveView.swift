@@ -10,37 +10,6 @@ import ARKit
 import simd
 import QuartzCore
 
-private enum BubbleZone: String, CaseIterable {
-    case upperLeft
-    case upperMiddle
-    case upperRight
-    case middleLeft
-    case middleMiddle
-    case middleRight
-    case lowerLeft
-    case lowerMiddle
-    case lowerRight
-
-    var assetName: String {
-        switch self {
-        case .upperLeft: return "upperleft"
-        case .upperMiddle: return "uppermiddle"
-        case .upperRight: return "upperright"
-        case .middleLeft: return "middleleft"
-        case .middleMiddle: return "middlemiddleanim"
-        case .middleRight: return "middleright"
-        case .lowerLeft: return "lowleft"
-        case .lowerMiddle: return "lowmiddle"
-        case .lowerRight: return "lowright"
-        }
-    }
-}
-
-private enum PoseVariant: String {
-    case left = "L"
-    case right = "R"
-}
-
 private struct ArmVisualTransform {
     let position: SIMD3<Float>
     let scale: SIMD3<Float>
@@ -65,6 +34,8 @@ struct ImmersiveView: View {
 
     @State private var gazeHoverBubbleID: UUID? = nil
     @State private var gazeHoverBeganAt: Date? = nil
+    @State private var lastSeenArmAnimationTriggerCount: Int = 0
+    @State private var handVisibilityToken: Int = 0
 
     private final class BubbleEntityStore {
         var entities: [UUID: ModelEntity] = [:]
@@ -157,31 +128,28 @@ struct ImmersiveView: View {
 
             let armsRoot = Entity()
             armsRoot.name = "ArmsRoot"
+            armsRoot.isEnabled = false
 
-            for zone in BubbleZone.allCases {
-                if let sourcePose = await loadArmEntity(named: zone.assetName) {
-                    let rightPose = sourcePose.clone(recursive: true)
-                    configurePoseEntity(rightPose, for: zone, variant: .right)
-                    rightPose.name = poseName(for: zone, variant: .right)
-                    rightPose.isEnabled = false
-                    armsRoot.addChild(rightPose)
-
-                    let leftPose = sourcePose.clone(recursive: true)
-                    configurePoseEntity(leftPose, for: zone, variant: .left)
-                    leftPose.name = poseName(for: zone, variant: .left)
-                    leftPose.isEnabled = false
-                    armsRoot.addChild(leftPose)
-
-                    print("Loaded arm pose variants: \(zone.assetName)")
-                } else {
-                    print("Failed to load arm pose: \(zone.assetName)")
-                }
+            if let rightSource = await loadArmEntity(named: "handpoint") {
+                let rightHand = rightSource.clone(recursive: true)
+                configureHandEntity(rightHand, for: .right)
+                rightHand.name = handPoseName(for: .right)
+                rightHand.isEnabled = false
+                armsRoot.addChild(rightHand)
+                print("Loaded right hand asset: handpoint")
+            } else {
+                print("Failed to load right hand asset: handpoint")
             }
 
-            if let idlePose = armsRoot.findEntity(
-                named: poseName(for: .middleMiddle, variant: .right)
-            ) {
-                idlePose.isEnabled = true
+            if let leftSource = await loadArmEntity(named: "lefthandpoint") {
+                let leftHand = leftSource.clone(recursive: true)
+                configureHandEntity(leftHand, for: .left)
+                leftHand.name = handPoseName(for: .left)
+                leftHand.isEnabled = false
+                armsRoot.addChild(leftHand)
+                print("Loaded left hand asset: lefthandpoint")
+            } else {
+                print("Failed to load left hand asset: lefthandpoint")
             }
 
             if let progressBar = attachments.entity(for: "progressBar") {
@@ -206,66 +174,14 @@ struct ImmersiveView: View {
             let controller = appModel.gameController
 
             let isReadyStage = controller.sessionState == .ready
-
-            let useIdleArm =
-                controller.sessionState == .ready ||
-                controller.sessionState == .finished
-
-            let activeState = controller.activeArm == .left
-                ? controller.leftArmState
-                : controller.rightArmState
-
-            let variantToShow: PoseVariant = useIdleArm
-                ? .right
-                : (controller.activeArm == .left ? .left : .right)
-
-            let currentZone = currentVisibleZone(
-                in: armsRoot,
-                variant: variantToShow
-            )
-
-            let zoneToShow: BubbleZone = useIdleArm
-                ? .middleMiddle
-                : stableVisualZone(
-                    for: activeState,
-                    currentZone: currentZone
-                )
-
-            updateArmPoseDisplay(
-                in: armsRoot,
-                zone: zoneToShow,
-                variant: variantToShow,
-                animateOnChange: controller.sessionState == .playing
-            )
-
-            let feedbackCount = clickCount + controller.popCount
-
-            if feedbackCount != bubbleStore.lastSeenClickCount {
-                bubbleStore.lastSeenClickCount = feedbackCount
-
-                let tapPoseName = poseName(
-                    for: zoneToShow,
-                    variant: variantToShow
-                )
-
-                if let pose = armsRoot.findEntity(named: tapPoseName) {
-                    Task { @MainActor in
-                        playAnimationIfAvailable(on: pose)
-                    }
-                }
-            }
-
-            updateArmsRootTransform(
-                armsRoot,
-                activeState: activeState,
-                activeArm: controller.activeArm,
-                isReadyStage: useIdleArm
-            )
+            handleArmAnimationTrigger(in: armsRoot, controller: controller)
+            updateArmsRootTransform(armsRoot)
 
             if isReadyStage {
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
+                hideAllHandPoses(in: armsRoot)
                 updateGazeCursorAndMarker(
                     result: nil,
                     isVisible: false
@@ -608,10 +524,10 @@ struct ImmersiveView: View {
         appModel.gameController.startSession()
     }
 
-    // MARK: - Arm pose helpers
+    // MARK: - Hand animation helpers
 
-    private func poseName(for zone: BubbleZone, variant: PoseVariant) -> String {
-        "Pose_\(variant.rawValue)_\(zone.rawValue)"
+    private func handPoseName(for arm: ActiveArm) -> String {
+        arm == .left ? "LeftHandPoint" : "RightHandPoint"
     }
 
     private func loadArmEntity(named name: String) async -> Entity? {
@@ -623,161 +539,113 @@ struct ImmersiveView: View {
         }
     }
 
-    private func configurePoseEntity(_ entity: Entity, for zone: BubbleZone, variant: PoseVariant) {
-        let transform = transformForZone(zone, variant: variant)
+    private func configureHandEntity(_ entity: Entity, for arm: ActiveArm) {
+        let transform = transformForHand(arm)
         entity.position = transform.position
         entity.scale = transform.scale
         entity.orientation = transform.orientation
     }
 
-    private func transformForZone(_ zone: BubbleZone, variant: PoseVariant) -> ArmVisualTransform {
+    private func transformForHand(_ arm: ActiveArm) -> ArmVisualTransform {
         let baseScale = SIMD3<Float>(repeating: 0.90)
         let rotateX = simd_quatf(angle: .pi * 0.5, axis: SIMD3<Float>(1, 0, 0))
         let rotateY = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
         let baseOrientation = rotateX * rotateY
 
-        let rightTransform: ArmVisualTransform
+        let xOffset: Float = arm == .left ? -0.06 : 0.06
+        let yaw: Float = arm == .left ? -.pi / 14 : .pi / 14
 
-        switch zone {
-        case .upperLeft:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(-0.02, -0.26, -0.30), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: -.pi / 10, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: -.pi / 20, axis: SIMD3<Float>(0, 0, 1)))
-        case .upperMiddle:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.0, -0.24, -0.30), scale: baseScale,
-                orientation: baseOrientation)
-        case .upperRight:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.02, -0.25, -0.30), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(0, 1, 0)))
-        case .middleLeft:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(-0.04, -0.31, -0.30), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: -.pi / 8, axis: SIMD3<Float>(0, 1, 0)))
-        case .middleMiddle:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.0, -0.30, -0.30), scale: baseScale,
-                orientation: baseOrientation)
-        case .middleRight:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.06, -0.35, -0.28), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 10, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: -.pi / 16, axis: SIMD3<Float>(1, 0, 0)))
-        case .lowerLeft:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(-0.03, -0.37, -0.28), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: -.pi / 9, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: .pi / 14, axis: SIMD3<Float>(0, 0, 1)))
-        case .lowerMiddle:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.0, -0.39, -0.28), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 18, axis: SIMD3<Float>(1, 0, 0)))
-        case .lowerRight:
-            rightTransform = ArmVisualTransform(
-                position: SIMD3<Float>(0.04, -0.37, -0.28), scale: baseScale,
-                orientation: baseOrientation
-                    * simd_quatf(angle: .pi / 9, axis: SIMD3<Float>(0, 1, 0))
-                    * simd_quatf(angle: -.pi / 14, axis: SIMD3<Float>(0, 0, 1)))
-        }
-
-        guard variant == .left else { return rightTransform }
-
-        let mirroredPosition = SIMD3<Float>(-rightTransform.position.x, rightTransform.position.y, rightTransform.position.z)
-        var mirroredScale = rightTransform.scale
-        mirroredScale.x *= -1
-        let mirroredOrientation = simd_quatf(angle: -.pi / 6, axis: SIMD3<Float>(0, 1, 0)) * rightTransform.orientation
-
-        return ArmVisualTransform(position: mirroredPosition, scale: mirroredScale, orientation: mirroredOrientation)
+        return ArmVisualTransform(
+            position: SIMD3<Float>(xOffset, -0.30, -0.30),
+            scale: baseScale,
+            orientation: baseOrientation * simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+        )
     }
 
-    private func currentVisibleZone(in armsRoot: Entity, variant: PoseVariant) -> BubbleZone? {
-        let prefix = "Pose_\(variant.rawValue)_"
-        for child in armsRoot.children where child.isEnabled {
-            guard child.name.hasPrefix(prefix) else { continue }
-            return BubbleZone(rawValue: String(child.name.dropFirst(prefix.count)))
-        }
-        return nil
-    }
+    @MainActor
+    private func handleArmAnimationTrigger(in armsRoot: Entity, controller: BubbleGameController) {
+        guard lastSeenArmAnimationTriggerCount != controller.armAnimationTriggerCount else { return }
+        lastSeenArmAnimationTriggerCount = controller.armAnimationTriggerCount
 
-    private func stableVisualZone(for state: ArmState, currentZone: BubbleZone?) -> BubbleZone {
-        let delta = state.tipPosition - state.basePosition
-        let vHigh: Float = 0.15, vLow: Float = 0.09
-        let hHigh: Float = 0.11, hLow: Float = 0.06
-
-        let vertical: Int
-        switch currentZone {
-        case .some(.upperLeft), .some(.upperMiddle), .some(.upperRight):
-            vertical = delta.y < vLow ? 0 : 1
-        case .some(.lowerLeft), .some(.lowerMiddle), .some(.lowerRight):
-            vertical = delta.y > -vLow ? 0 : -1
-        default:
-            vertical = delta.y > vHigh ? 1 : delta.y < -vHigh ? -1 : 0
+        guard controller.sessionState == .playing,
+              let prediction = controller.armAnimationPrediction else {
+            hideAllHandPoses(in: armsRoot)
+            return
         }
 
-        let horizontal: Int
-        switch currentZone {
-        case .some(.upperLeft), .some(.middleLeft), .some(.lowerLeft):
-            horizontal = delta.x > -hLow ? 0 : -1
-        case .some(.upperRight), .some(.middleRight), .some(.lowerRight):
-            horizontal = delta.x < hLow ? 0 : 1
-        default:
-            horizontal = delta.x < -hHigh ? -1 : delta.x > hHigh ? 1 : 0
-        }
+        switch prediction {
+        case .left:
+            showHand(.left, in: armsRoot, hideAfter: 0.90)
 
-        switch (vertical, horizontal) {
-        case (1, -1): return .upperLeft
-        case (1,  0): return .upperMiddle
-        case (1,  1): return .upperRight
-        case (0, -1): return .middleLeft
-        case (0,  0): return .middleMiddle
-        case (0,  1): return .middleRight
-        case (-1,-1): return .lowerLeft
-        case (-1, 0): return .lowerMiddle
-        case (-1, 1): return .lowerRight
-        default:      return .middleMiddle
+        case .right:
+            showHand(.right, in: armsRoot, hideAfter: 0.90)
+
+        case .both:
+            let hand = visibleHand(in: armsRoot) ?? controller.activeArm
+            let token = showHand(hand, in: armsRoot, hideAfter: 1.05)
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.46))
+                guard handVisibilityToken == token else { return }
+                controller.completeArmAnimationPop()
+            }
         }
     }
 
-    private func updateArmPoseDisplay(
-        in armsRoot: Entity,
-        zone: BubbleZone,
-        variant: PoseVariant,
-        animateOnChange: Bool
-    ) {
-        let targetName = poseName(for: zone, variant: variant)
-        guard armsRoot.children.first(where: { $0.isEnabled })?.name != targetName else { return }
+    @MainActor
+    @discardableResult
+    private func showHand(_ arm: ActiveArm, in armsRoot: Entity, hideAfter delay: TimeInterval) -> Int {
+        handVisibilityToken += 1
+        let token = handVisibilityToken
+
+        let targetName = handPoseName(for: arm)
+        armsRoot.isEnabled = true
 
         for child in armsRoot.children {
             child.isEnabled = child.name == targetName
         }
 
-        if animateOnChange, let pose = armsRoot.findEntity(named: targetName) {
+        if let pose = armsRoot.findEntity(named: targetName) {
+            pose.stopAllAnimations(recursive: true)
             playAnimationIfAvailable(on: pose)
         }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(delay))
+            guard handVisibilityToken == token else { return }
+            hideAllHandPoses(in: armsRoot)
+        }
+
+        return token
     }
 
-    private func updateArmsRootTransform(
-        _ armsRoot: Entity,
-        activeState: ArmState,
-        activeArm: ActiveArm,
-        isReadyStage: Bool
-    ) {
-        _ = activeState; _ = activeArm
+    private func visibleHand(in armsRoot: Entity) -> ActiveArm? {
+        if armsRoot.findEntity(named: handPoseName(for: .left))?.isEnabled == true {
+            return .left
+        }
+
+        if armsRoot.findEntity(named: handPoseName(for: .right))?.isEnabled == true {
+            return .right
+        }
+
+        return nil
+    }
+
+    private func hideAllHandPoses(in armsRoot: Entity) {
+        for child in armsRoot.children {
+            child.isEnabled = false
+        }
+        armsRoot.isEnabled = false
+    }
+
+    private func updateArmsRootTransform(_ armsRoot: Entity) {
         let targetTransform = Transform(
             scale: SIMD3<Float>(repeating: 1.0),
             rotation: simd_quatf(angle: 0.0, axis: SIMD3<Float>(0, 1, 0)),
             translation: .zero
         )
         armsRoot.move(to: targetTransform, relativeTo: armsRoot.parent,
-                      duration: isReadyStage ? 0.20 : 0.10, timingFunction: .easeInOut)
+                      duration: 0.10, timingFunction: .easeInOut)
     }
 
     private func playAnimationIfAvailable(on entity: Entity) {

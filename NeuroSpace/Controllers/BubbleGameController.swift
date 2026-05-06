@@ -15,6 +15,8 @@ final class BubbleGameController {
     var activeArm: ActiveArm = .right
     var leftArmState: ArmState = ArmState()
     var rightArmState: ArmState = ArmState()
+    var armAnimationPrediction: PredictedClass? = nil
+    var armAnimationTriggerCount: Int = 0
 
     var bubbles: [Bubble] = []
     var score: Int = 0
@@ -214,6 +216,8 @@ final class BubbleGameController {
     // MARK: - BCI prediction mapping
 
     func applyPredictionClass(_ prediction: PredictedClass) {
+        triggerArmAnimation(for: prediction)
+
         switch prediction {
         case .left:
             setActiveArm(.left)
@@ -224,7 +228,8 @@ final class BubbleGameController {
             moveActiveArmTowardEyeTarget()
 
         case .both:
-            attemptPopEyeTargetedBubble()
+            currentIntent = .pop
+            currentArmState.isPopTriggered = true
         }
     }
 
@@ -295,14 +300,20 @@ final class BubbleGameController {
         currentArmState.isPopTriggered = false
 
         switch intent {
-        case .moveLeft:     targetDirection = [-1, 0, 0]
-        case .moveRight:    targetDirection = [1, 0, 0]
+        case .moveLeft:
+            triggerArmAnimation(for: .left)
+            targetDirection = [-1, 0, 0]
+        case .moveRight:
+            triggerArmAnimation(for: .right)
+            targetDirection = [1, 0, 0]
         case .moveUp:       targetDirection = [0, 1, 0]
         case .moveDown:     targetDirection = [0, -1, 0]
         case .moveForward:  targetDirection = [0, 0, -1]
         case .moveBackward: targetDirection = [0, 0, 1]
         case .idle:         targetDirection = .zero
-        case .pop:          currentArmState.isPopTriggered = true
+        case .pop:
+            triggerArmAnimation(for: .both)
+            currentArmState.isPopTriggered = true
         }
 
         filteredDirection = targetDirection
@@ -419,6 +430,10 @@ final class BubbleGameController {
 
         registerBubblePop(at: idx)
         checkSessionFinished()
+    }
+
+    func completeArmAnimationPop() {
+        popTargetedBubble()
     }
 
     // MARK: - Debug Helpers
@@ -541,6 +556,11 @@ final class BubbleGameController {
     private func autoPopIfTouching() {
         // Intentionally no longer auto-pops during BCI testing.
         // Pop is now confirmed using the "both" prediction.
+    }
+
+    private func triggerArmAnimation(for prediction: PredictedClass) {
+        armAnimationPrediction = prediction
+        armAnimationTriggerCount += 1
     }
 
     private func registerBubblePop(at index: Int) {

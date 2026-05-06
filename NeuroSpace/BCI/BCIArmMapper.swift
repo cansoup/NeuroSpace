@@ -30,4 +30,8 @@ final class BCIArmMapper {
             z: message.moveZ
         )
     }
+
+    func handlePredictionClass(_ prediction: PredictedClass) {
+        controller.applyPredictionClass(prediction)
+    }
 }
