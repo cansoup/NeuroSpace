@@ -16,38 +16,38 @@
 			containerPortal = 579989FE2F67A23100C7005F /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 57998A052F67A23100C7005F;
-			remoteInfo = "Neurospace-Team5";
+			remoteInfo = "NeuroSpace";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		57998A062F67A23100C7005F /* Neurospace-Team5.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Neurospace-Team5.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		57998A062F67A23100C7005F /* NeuroSpace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NeuroSpace.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		57998A0A2F67A23100C7005F /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
-		57998A1A2F67A23200C7005F /* Neurospace-Team5Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Neurospace-Team5Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		57998A1A2F67A23200C7005F /* NeuroSpaceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "NeuroSpaceTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		57998A202F67A23200C7005F /* Exceptions for "Neurospace-Team5" folder in "Neurospace-Team5" target */ = {
+		57998A202F67A23200C7005F /* Exceptions for "NeuroSpace" folder in "NeuroSpace" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 57998A052F67A23100C7005F /* Neurospace-Team5 */;
+			target = 57998A052F67A23100C7005F /* NeuroSpace */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		57998A082F67A23100C7005F /* Neurospace-Team5 */ = {
+		57998A082F67A23100C7005F /* NeuroSpace */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				57998A202F67A23200C7005F /* Exceptions for "Neurospace-Team5" folder in "Neurospace-Team5" target */,
+				57998A202F67A23200C7005F /* Exceptions for "NeuroSpace" folder in "NeuroSpace" target */,
 			);
-			path = "Neurospace-Team5";
+			path = "NeuroSpace";
 			sourceTree = "<group>";
 		};
-		57998A1D2F67A23200C7005F /* Neurospace-Team5Tests */ = {
+		57998A1D2F67A23200C7005F /* NeuroSpaceTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Neurospace-Team5Tests";
+			path = "NeuroSpaceTests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -74,9 +74,9 @@
 		579989FD2F67A23100C7005F = {
 			isa = PBXGroup;
 			children = (
-				57998A082F67A23100C7005F /* Neurospace-Team5 */,
+				57998A082F67A23100C7005F /* NeuroSpace */,
 				57998A092F67A23100C7005F /* Packages */,
-				57998A1D2F67A23200C7005F /* Neurospace-Team5Tests */,
+				57998A1D2F67A23200C7005F /* NeuroSpaceTests */,
 				57998A072F67A23100C7005F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,8 +84,8 @@
 		57998A072F67A23100C7005F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				57998A062F67A23100C7005F /* Neurospace-Team5.app */,
-				57998A1A2F67A23200C7005F /* Neurospace-Team5Tests.xctest */,
+				57998A062F67A23100C7005F /* NeuroSpace.app */,
+				57998A1A2F67A23200C7005F /* NeuroSpaceTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -101,9 +101,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		57998A052F67A23100C7005F /* Neurospace-Team5 */ = {
+		57998A052F67A23100C7005F /* NeuroSpace */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 57998A212F67A23200C7005F /* Build configuration list for PBXNativeTarget "Neurospace-Team5" */;
+			buildConfigurationList = 57998A212F67A23200C7005F /* Build configuration list for PBXNativeTarget "NeuroSpace" */;
 			buildPhases = (
 				57998A022F67A23100C7005F /* Sources */,
 				57998A032F67A23100C7005F /* Frameworks */,
@@ -114,19 +114,19 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				57998A082F67A23100C7005F /* Neurospace-Team5 */,
+				57998A082F67A23100C7005F /* NeuroSpace */,
 			);
-			name = "Neurospace-Team5";
+			name = "NeuroSpace";
 			packageProductDependencies = (
 				57998A0B2F67A23100C7005F /* RealityKitContent */,
 			);
-			productName = "Neurospace-Team5";
-			productReference = 57998A062F67A23100C7005F /* Neurospace-Team5.app */;
+			productName = "NeuroSpace";
+			productReference = 57998A062F67A23100C7005F /* NeuroSpace.app */;
 			productType = "com.apple.product-type.application";
 		};
-		57998A192F67A23200C7005F /* Neurospace-Team5Tests */ = {
+		57998A192F67A23200C7005F /* NeuroSpaceTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 57998A262F67A23200C7005F /* Build configuration list for PBXNativeTarget "Neurospace-Team5Tests" */;
+			buildConfigurationList = 57998A262F67A23200C7005F /* Build configuration list for PBXNativeTarget "NeuroSpaceTests" */;
 			buildPhases = (
 				57998A162F67A23200C7005F /* Sources */,
 				57998A172F67A23200C7005F /* Frameworks */,
@@ -138,13 +138,13 @@
 				57998A1C2F67A23200C7005F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				57998A1D2F67A23200C7005F /* Neurospace-Team5Tests */,
+				57998A1D2F67A23200C7005F /* NeuroSpaceTests */,
 			);
-			name = "Neurospace-Team5Tests";
+			name = "NeuroSpaceTests";
 			packageProductDependencies = (
 			);
-			productName = "Neurospace-Team5Tests";
-			productReference = 57998A1A2F67A23200C7005F /* Neurospace-Team5Tests.xctest */;
+			productName = "NeuroSpaceTests";
+			productReference = 57998A1A2F67A23200C7005F /* NeuroSpaceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -166,7 +166,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 57998A012F67A23100C7005F /* Build configuration list for PBXProject "Neurospace-Team5" */;
+			buildConfigurationList = 57998A012F67A23100C7005F /* Build configuration list for PBXProject "NeuroSpace" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -180,8 +180,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				57998A052F67A23100C7005F /* Neurospace-Team5 */,
-				57998A192F67A23200C7005F /* Neurospace-Team5Tests */,
+				57998A052F67A23100C7005F /* NeuroSpace */,
+				57998A192F67A23200C7005F /* NeuroSpaceTests */,
 			);
 		};
 /* End PBXProject section */
@@ -223,7 +223,7 @@
 /* Begin PBXTargetDependency section */
 		57998A1C2F67A23200C7005F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 57998A052F67A23100C7005F /* Neurospace-Team5 */;
+			target = 57998A052F67A23100C7005F /* NeuroSpace */;
 			targetProxy = 57998A1B2F67A23200C7005F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -245,7 +245,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.Neurospace-Team5";
+				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpace";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -274,7 +274,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.Neurospace-Team5";
+				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpace";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -417,7 +417,7 @@
 				DEVELOPMENT_TEAM = 74G9LBNBXV;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.Neurospace-Team5Tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpaceTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -426,7 +426,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Neurospace-Team5.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Neurospace-Team5";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NeuroSpace.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NeuroSpace";
 				XROS_DEPLOYMENT_TARGET = 26.2;
 			};
 			name = Debug;
@@ -440,7 +440,7 @@
 				DEVELOPMENT_TEAM = 74G9LBNBXV;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.Neurospace-Team5Tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "NeuroSpace.NeuroSpaceTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -449,7 +449,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Neurospace-Team5.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Neurospace-Team5";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NeuroSpace.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NeuroSpace";
 				XROS_DEPLOYMENT_TARGET = 26.2;
 			};
 			name = Release;
@@ -457,7 +457,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		57998A012F67A23100C7005F /* Build configuration list for PBXProject "Neurospace-Team5" */ = {
+		57998A012F67A23100C7005F /* Build configuration list for PBXProject "NeuroSpace" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				57998A242F67A23200C7005F /* Debug */,
@@ -466,7 +466,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		57998A212F67A23200C7005F /* Build configuration list for PBXNativeTarget "Neurospace-Team5" */ = {
+		57998A212F67A23200C7005F /* Build configuration list for PBXNativeTarget "NeuroSpace" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				57998A222F67A23200C7005F /* Debug */,
@@ -475,7 +475,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		57998A262F67A23200C7005F /* Build configuration list for PBXNativeTarget "Neurospace-Team5Tests" */ = {
+		57998A262F67A23200C7005F /* Build configuration list for PBXNativeTarget "NeuroSpaceTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				57998A272F67A23200C7005F /* Debug */,
