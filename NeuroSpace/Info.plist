@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationPreferredDefaultSceneSessionRole</key>
+        <string>UIWindowSceneSessionRoleApplication</string>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <true/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UISceneSessionRoleImmersiveSpaceApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneInitialImmersionStyle</key>
+                    <string>UIImmersionStyleFull</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+
+    <!-- Allows use of local network to receive commands from the Python app -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <!-- Remove or tighten for production -->
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>192.168.0.7</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+
+    <!-- Defaults used to prefill the UI, not final -->
+    <key>BCI_DEFAULT_HOST</key>
+    <string>192.168.0.7</string>
+    <key>BCI_DEFAULT_PORT</key>
+    <string>8765</string>
+</dict>
+</plist>

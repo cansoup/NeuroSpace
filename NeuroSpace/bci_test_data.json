@@ -1,0 +1,62 @@
+[
+  {
+    "type": "prediction",
+    "timestamp": 1745611234.567,
+    "session_id": "test_session",
+    "predicted_class": "right",
+    "predicted_index": 1,
+    "confidence": 0.95,
+    "probabilities": {
+      "left": 0.02,
+      "right": 0.95,
+      "both": 0.03
+    },
+    "processing_time_ms": 12.4,
+    "above_threshold": true
+  },
+  {
+    "type": "prediction",
+    "timestamp": 1745611235.567,
+    "session_id": "test_session",
+    "predicted_class": "right",
+    "predicted_index": 1,
+    "confidence": 0.94,
+    "probabilities": {
+      "left": 0.03,
+      "right": 0.94,
+      "both": 0.03
+    },
+    "processing_time_ms": 12.1,
+    "above_threshold": true
+  },
+  {
+    "type": "prediction",
+    "timestamp": 1745611236.567,
+    "session_id": "test_session",
+    "predicted_class": "left",
+    "predicted_index": 0,
+    "confidence": 0.96,
+    "probabilities": {
+      "left": 0.96,
+      "right": 0.02,
+      "both": 0.02
+    },
+    "processing_time_ms": 11.8,
+    "above_threshold": true
+  },
+  {
+    "type": "prediction",
+    "timestamp": 1745611237.567,
+    "session_id": "test_session",
+    "predicted_class": "both",
+    "predicted_index": 2,
+    "confidence": 0.91,
+    "probabilities": {
+      "left": 0.20,
+      "right": 0.19,
+      "both": 0.91
+    },
+    "processing_time_ms": 13.2,
+    "above_threshold": true
+  }
+]
