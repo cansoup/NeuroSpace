@@ -70,7 +70,9 @@ CLASS_NAMES = ["left", "right", "both"]
 RESOLVE_TIMEOUT = 15.0
 BUFFER_SECONDS  = 15.0
 POLL_SLEEP      = 0.01
-THRESHOLD       = 0.75
+# Per-class confidence thresholds, tuned from live testing:
+# RIGHT fires very cleanly (p~0.95+), LEFT is weaker (p~0.75), BOTH rarely clears 0.75.
+THRESHOLDS = [0.60, 0.75, 0.45]  # [left, right, both]
 
 # Continuous-mode tuning
 INFER_INTERVAL = 0.5    # seconds between sliding-window inferences
@@ -136,7 +138,7 @@ def _make_bridge_msg(pred_name, pred_idx, probs, session_id):
         "confidence": round(conf, 3),
         "probabilities": {n: round(float(p), 3) for n, p in zip(CLASS_NAMES, probs)},
         "processing_time_ms": 0.0,
-        "above_threshold": conf >= THRESHOLD,
+        "above_threshold": conf >= THRESHOLDS[pred_idx],
     }
 
 
@@ -276,7 +278,7 @@ def _continuous_loop(model, eeg_inlet, bridge_q, session_id):
     last_infer_time = 0.0
     fired = 0
 
-    print(f"Continuous mode  |  threshold={THRESHOLD}  debounce={DEBOUNCE_COUNT}x  cooldown={COOLDOWN}s")
+    print(f"Continuous mode  |  thresholds left={THRESHOLDS[0]} right={THRESHOLDS[1]} both={THRESHOLDS[2]}  debounce={DEBOUNCE_COUNT}x  cooldown={COOLDOWN}s")
     print(f"Buffering {N_WINDOW/SFREQ:.0f} seconds of EEG before first inference...\n")
 
     try:
@@ -304,7 +306,7 @@ def _continuous_loop(model, eeg_inlet, bridge_q, session_id):
                 continue
             pred_name, pred_idx, probs = result
             conf = float(probs[pred_idx])
-            gate = "ABOVE" if conf >= THRESHOLD else "below"
+            gate = "ABOVE" if conf >= THRESHOLDS[pred_idx] else "below"
 
             bar = "  ".join(f"{n}={probs[i]:.2f}" for i, n in enumerate(CLASS_NAMES))
             print(f"  [{pred_name:<5} p={conf:.2f} {gate}]  {bar}", end="\r", flush=True)
@@ -314,7 +316,7 @@ def _continuous_loop(model, eeg_inlet, bridge_q, session_id):
                     and now - last_fire_time >= COOLDOWN):
                 idxs  = [p[0] for p in recent_preds]
                 confs = [p[1] for p in recent_preds]
-                if len(set(idxs)) == 1 and min(confs) >= THRESHOLD:
+                if len(set(idxs)) == 1 and min(confs) >= THRESHOLDS[idxs[0]]:
                     last_fire_time = now
                     fired += 1
                     recent_preds.clear()
