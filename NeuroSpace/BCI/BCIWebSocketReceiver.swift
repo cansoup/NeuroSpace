@@ -3,6 +3,10 @@ import Observation
 
 @Observable
 final class BCIWebSocketClient {
+    private struct Envelope: Decodable {
+        let type: String
+    }
+
     struct IntentMessage: Decodable {
         let type: String
         let intent: String
@@ -133,11 +137,7 @@ final class BCIWebSocketClient {
         guard let data = text.data(using: .utf8) else { return }
 
         do {
-            guard let generic = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let type = generic["type"] as? String else {
-                appendLog("Malformed JSON message")
-                return
-            }
+            let type = try decoder.decode(Envelope.self, from: data).type
 
             switch type {
             case "prediction":

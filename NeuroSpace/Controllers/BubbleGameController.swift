@@ -266,7 +266,7 @@ final class BubbleGameController {
     private func moveActiveArmToward(_ target: Bubble) {
         let toBubble = target.position - currentArmState.tipPosition
 
-        guard simd_length(toBubble) > 0.001 else {
+        guard simd_length_squared(toBubble) > 0.000_001 else {
             autoPopIfTouching()
             return
         }
@@ -349,7 +349,7 @@ final class BubbleGameController {
             SIMD3<Float>(repeating: inputSmoothing)
         )
 
-        if simd_length(raw) < 0.001 {
+        if simd_length_squared(raw) < 0.000_001 {
             filteredDirection = simd_mix(
                 filteredDirection,
                 .zero,
@@ -371,13 +371,14 @@ final class BubbleGameController {
     func update(deltaTime: Float) {
         guard sessionState == .playing || sessionState == .ready else { return }
 
-        let speedFactor = simd_length(targetDirection) > 0 ? acceleration : deceleration
+        let hasInput = simd_length_squared(targetDirection) > 0.000_001
+        let speedFactor = hasInput ? acceleration : deceleration
         let targetVelocity = targetDirection * maxSpeed
 
         currentArmState.velocity +=
             (targetVelocity - currentArmState.velocity) * min(speedFactor * deltaTime, 1.0)
 
-        if simd_length(currentArmState.velocity) < 0.001 {
+        if simd_length_squared(currentArmState.velocity) < 0.000_001 {
             currentArmState.velocity = .zero
         }
 
@@ -485,26 +486,26 @@ final class BubbleGameController {
 
     private func nearestBubbleDistance(for arm: ActiveArm) -> Float {
         let tip = arm == .left ? leftArmState.tipPosition : rightArmState.tipPosition
-        var minDist: Float = .greatestFiniteMagnitude
+        var minDist2: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
             guard bubble.canBePopped(by: arm) else { continue }
-            minDist = min(minDist, simd_distance(bubble.position, tip))
+            minDist2 = min(minDist2, simd_distance_squared(bubble.position, tip))
         }
 
-        return minDist
+        return sqrt(minDist2)
     }
 
     private func nearestBubble() -> Bubble? {
         var closest: Bubble?
-        var minDist: Float = .greatestFiniteMagnitude
+        var minDist2: Float = .greatestFiniteMagnitude
 
         for bubble in bubbles where !bubble.isGone {
             guard bubble.canBePopped(by: activeArm) else { continue }
 
-            let d = simd_distance(bubble.position, currentArmState.tipPosition)
-            if d < minDist {
-                minDist = d
+            let d2 = simd_distance_squared(bubble.position, currentArmState.tipPosition)
+            if d2 < minDist2 {
+                minDist2 = d2
                 closest = bubble
             }
         }
@@ -576,18 +577,14 @@ final class BubbleGameController {
 
     private func updateBubbleLifecycle(deltaTime: Float) {
         if stageConfig.respawnsEnabled {
-            var updated = bubbles
-
-            for i in updated.indices where !updated[i].isPopped {
-                if simd_length(updated[i].velocity) > 0.001 {
-                    updated[i].position += updated[i].velocity * deltaTime
+            for i in bubbles.indices where !bubbles[i].isPopped {
+                if simd_length_squared(bubbles[i].velocity) > 0.000_001 {
+                    bubbles[i].position += bubbles[i].velocity * deltaTime
                 }
             }
 
-            if updated.allSatisfy(\.isGone) {
+            if bubbles.allSatisfy(\.isGone) {
                 bubbles = Self.generateBubbles(for: stageConfig)
-            } else {
-                bubbles = updated
             }
             return
         }
@@ -613,10 +610,12 @@ final class BubbleGameController {
         let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.26 ... 0.14 : -0.06 ... 0.06
 
         let minDistance = config.bubbleRadius * 2.0
+        let minDistance2 = minDistance * minDistance
 
         let rightTipStart = SIMD3<Float>(0.16, 0.02, 0.00)
         let leftTipStart  = SIMD3<Float>(-0.16, 0.02, 0.00)
         let safeRadius = config.bubbleRadius + 0.025
+        let safeRadius2 = safeRadius * safeRadius
 
         let centerExclusionX: Float = max(0.06, config.bubbleRadius * 0.6)
         let centerExclusionZ: Float = max(0.05, config.bubbleRadius * 0.5)
@@ -666,14 +665,14 @@ final class BubbleGameController {
 
                 // Tip safety (always enforced — bubbles must not spawn on the
                 // player's resting hand position)
-                if simd_distance(candidate, rightTipStart) < safeRadius ||
-                   simd_distance(candidate, leftTipStart) < safeRadius {
+                if simd_distance_squared(candidate, rightTipStart) < safeRadius2 ||
+                   simd_distance_squared(candidate, leftTipStart) < safeRadius2 {
                     continue
                 }
 
                 // Inter-bubble minimum distance (best-effort)
                 if applyMinDistance,
-                   positions.contains(where: { simd_distance($0, candidate) < minDistance }) {
+                   positions.contains(where: { simd_distance_squared($0, candidate) < minDistance2 }) {
                     continue
                 }
 
@@ -719,7 +718,7 @@ final class BubbleGameController {
                 Float.random(in: -0.8...0.8)
             )
 
-            let velocity: SIMD3<Float> = (speed > 0.001 && simd_length(rawDir) > 0.001)
+            let velocity: SIMD3<Float> = (speed > 0.001 && simd_length_squared(rawDir) > 0.000_001)
                 ? simd_normalize(rawDir) * speed
                 : .zero
 
