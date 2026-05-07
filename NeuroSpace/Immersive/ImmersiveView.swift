@@ -273,16 +273,26 @@ struct ImmersiveView: View {
 
             guard newState == .finished else { return }
 
+            let finishReason = appModel.gameController.finishReason
+
             Task { @MainActor in
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
 
-                switch appModel.gameController.finishReason {
+                switch finishReason {
                 case .allPopped:
                     openWindow(id: appModel.congratsWindowID)
 
                 default:
                     openWindow(id: appModel.missionFailedWindowID)
+                }
+
+                // Stage ended — tear down the immersive space.
+                // Next Stage / Try Again paths re-open it on demand.
+                if appModel.immersiveSpaceState == .open {
+                    appModel.immersiveSpaceState = .inTransition
+                    await dismissImmersiveSpace()
+                    appModel.immersiveSpaceState = .closed
                 }
             }
         }

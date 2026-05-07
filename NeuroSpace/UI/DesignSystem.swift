@@ -112,7 +112,11 @@ extension View {
     }
 
     func tealGlassCard(radius: CGFloat = DS.radiusXl) -> some View {
-        modifier(GlassCard(cornerRadius: radius, borderColor: DS.teal.opacity(0.2)))
+        background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: radius))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius)
+                    .strokeBorder(DS.teal.opacity(0.2), lineWidth: 1)
+            )
     }
 }
 
