@@ -361,8 +361,9 @@ struct ImmersiveView: View {
         }
 
         var bestBubble: Bubble?
-        var bestPerp: Float = .greatestFiniteMagnitude
+        var bestPerp2: Float = .greatestFiniteMagnitude
         var bestDepth: Float = 0.9
+        let gazeSelectRadius2 = gazeSelectRadius * gazeSelectRadius
 
         for bubble in bubbles where !bubble.isGone {
             let toBubble = bubble.position - ray.origin
@@ -370,10 +371,10 @@ struct ImmersiveView: View {
             guard depth > 0 else { continue }
 
             let closestPoint = ray.origin + ray.direction * depth
-            let perp = simd_distance(bubble.position, closestPoint)
+            let perp2 = simd_distance_squared(bubble.position, closestPoint)
 
-            if perp < bestPerp {
-                bestPerp = perp
+            if perp2 < bestPerp2 {
+                bestPerp2 = perp2
                 bestDepth = depth
                 bestBubble = bubble
             }
@@ -382,7 +383,7 @@ struct ImmersiveView: View {
         let cursorDepth = max(0.55, min(bestDepth, 1.35))
         let rawCursorPos = ray.origin + ray.direction * cursorDepth
 
-        if bestPerp <= gazeSelectRadius, let bubble = bestBubble {
+        if bestPerp2 <= gazeSelectRadius2, let bubble = bestBubble {
             // Snap cursor to the bubble centre when the ray is close enough
             return updateHoverState(
                 bubble: bubble,
@@ -498,11 +499,11 @@ struct ImmersiveView: View {
             ? controller.leftArmState.tipPosition
             : controller.rightArmState.tipPosition
 
-        let distance = simd_distance(activeTip, startOrbPosition)
         let hoverRadius: Float = 0.10
+        let hoverRadius2 = hoverRadius * hoverRadius
         let dwellDuration: TimeInterval = 0.45
 
-        if distance <= hoverRadius {
+        if simd_distance_squared(activeTip, startOrbPosition) <= hoverRadius2 {
             startTargetHighlighted = true
             if startHoverBeganAt == nil {
                 startHoverBeganAt = Date()
