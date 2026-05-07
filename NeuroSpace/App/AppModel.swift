@@ -28,13 +28,20 @@ final class AppModel {
     var shouldEndSession = false
     var debugMode: Bool = true
     var selectedEnvironment: EnvironmentChoice = .deepSpace
+    var hasCompletedOnboarding: Bool = false
 
     var gameController = BubbleGameController()
+    var bciClient = BCIWebSocketClient()
     var jsonPlayback: JSONPlaybackManager!
     var sessionStore = SessionStore()
 
     init() {
         jsonPlayback = JSONPlaybackManager(controller: gameController)
+    }
+
+    var isEEGConnected: Bool {
+        if case .connected = bciClient.state { return true }
+        return false
     }
 
     func saveSessionRecord() {

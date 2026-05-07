@@ -14,13 +14,21 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            switch screen {
-            case .lobby:
-                LobbyView(screen: $screen)
-            case .progress:
-                MyProgressView(onBack: backToLobby)
-            case .settings:
-                SettingsView(onBack: backToLobby)
+            if !appModel.hasCompletedOnboarding {
+                OnboardingView(onContinue: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        appModel.hasCompletedOnboarding = true
+                    }
+                })
+            } else {
+                switch screen {
+                case .lobby:
+                    LobbyView(screen: $screen)
+                case .progress:
+                    MyProgressView(onBack: backToLobby)
+                case .settings:
+                    SettingsView(onBack: backToLobby)
+                }
             }
         }
         .frame(width: 1100, height: 560)
