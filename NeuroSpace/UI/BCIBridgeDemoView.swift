@@ -2,8 +2,17 @@ import SwiftUI
 
 struct BCIBridgeDemoView: View {
     @State private var client = BCIWebSocketClient()
-    @State private var host: String = Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_HOST") as? String ?? "192.168.1.10"
-    @State private var port: String = Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_PORT") as? String ?? "8765"
+
+    private static let defaultHost: String =
+        Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_HOST") as? String
+        ?? "192.168.1.10"
+    private static let defaultPort: String =
+        Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_PORT") as? String
+        ?? "8765"
+
+    @AppStorage("bci.host") private var host: String = Self.defaultHost
+    @AppStorage("bci.port") private var port: String = Self.defaultPort
+    @AppStorage("bci.autoConnect") private var autoConnect: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -23,6 +32,10 @@ struct BCIBridgeDemoView: View {
                 Button("Connect") {
                     client.connect(host: host, port: Int(port) ?? 8765)
                 }
+                Button("Use Default") {
+                    host = Self.defaultHost
+                    port = Self.defaultPort
+                }
                 Button("Ping") {
                     client.sendPing()
                 }
@@ -38,6 +51,9 @@ struct BCIBridgeDemoView: View {
             Text("Last intent: \(client.lastIntent)")
             Text("Confidence: \(client.lastConfidence.formatted(.number.precision(.fractionLength(2))))")
 
+            Toggle("Auto-connect on launch", isOn: $autoConnect)
+                .toggleStyle(.switch)
+
             Divider()
 
             ScrollView {
@@ -52,6 +68,10 @@ struct BCIBridgeDemoView: View {
         }
         .padding(24)
         .frame(minWidth: 700, minHeight: 500)
+        .onAppear {
+            guard autoConnect else { return }
+            client.connect(host: host, port: Int(port) ?? 8765)
+        }
     }
 }
 
