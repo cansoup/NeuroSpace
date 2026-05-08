@@ -163,7 +163,7 @@ struct LobbyView: View {
                         switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                         case .opened:
                             appModel.immersiveSpaceState = .open
-                            controller.startSession()
+                            controller.beginCalibration()
                             dismissWindow(id: appModel.mainWindowID)
 
                         case .userCancelled, .error:
@@ -173,12 +173,16 @@ struct LobbyView: View {
                             appModel.immersiveSpaceState = .closed
                         }
                     } else if appModel.immersiveSpaceState == .open {
-                        controller.startSession()
+                        controller.beginCalibration()
                         dismissWindow(id: appModel.mainWindowID)
                     }
                 }
             }
-            .disabled(controller.sessionState == .playing || appModel.immersiveSpaceState == .inTransition)
+            .disabled(
+                controller.sessionState == .playing ||
+                controller.sessionState == .calibrating ||
+                appModel.immersiveSpaceState == .inTransition
+            )
 
             menuButton(icon: "chart.line.uptrend.xyaxis", label: "My Progress") {
                 withAnimation(.easeInOut(duration: 0.25)) {

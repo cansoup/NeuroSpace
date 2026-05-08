@@ -69,6 +69,28 @@ final class BubbleGameController {
 
     // MARK: - Session control
 
+    func beginCalibration() {
+        timerTask?.cancel()
+        timerTask = nil
+        finishReason = nil
+        sessionState = .calibrating
+        activeArm = .right
+        currentIntent = .idle
+        targetDirection = .zero
+        filteredDirection = .zero
+        targetedBubbleID = nil
+    }
+
+    func completeCalibration() {
+        guard sessionState == .calibrating else { return }
+        sessionState = .ready
+        activeArm = .right
+        currentIntent = .idle
+        targetDirection = .zero
+        filteredDirection = .zero
+        targetedBubbleID = nil
+    }
+
     func startSession() {
         finishReason = nil
         sessionState = .playing
