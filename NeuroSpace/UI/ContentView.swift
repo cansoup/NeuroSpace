@@ -14,13 +14,21 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            switch screen {
-            case .lobby:
-                LobbyView(screen: $screen)
-            case .progress:
-                MyProgressView(onBack: backToLobby)
-            case .settings:
-                SettingsView(onBack: backToLobby)
+            if !appModel.hasCompletedOnboarding {
+                OnboardingView(onContinue: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        appModel.hasCompletedOnboarding = true
+                    }
+                })
+            } else {
+                switch screen {
+                case .lobby:
+                    LobbyView(screen: $screen)
+                case .progress:
+                    MyProgressView(onBack: backToLobby)
+                case .settings:
+                    SettingsView(onBack: backToLobby)
+                }
             }
         }
         .frame(width: 1100, height: 560)
@@ -41,8 +49,6 @@ struct LobbyView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.dismissWindow) private var dismissWindow
 
-    @State private var skyboxOpen = false
-
     private var controller: BubbleGameController { appModel.gameController }
 
     var body: some View {
@@ -61,11 +67,6 @@ struct LobbyView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            guard !skyboxOpen else { return }
-            skyboxOpen = true
-            await openImmersiveSpace(id: appModel.lobbySkyboxID)
-        }
     }
 
     // MARK: - Left Column: Brand + EEG Status
@@ -148,11 +149,6 @@ struct LobbyView: View {
 
             menuButton(icon: "play.fill", label: "Start Session", isPrimary: true) {
                 Task { @MainActor in
-                    if skyboxOpen {
-                        await dismissImmersiveSpace()
-                        skyboxOpen = false
-                    }
-
                     if controller.sessionState == .finished || controller.sessionState == .idle {
                         controller.resetGame()
                     }

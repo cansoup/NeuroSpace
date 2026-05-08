@@ -298,6 +298,10 @@ struct CongratsView: View {
                     controller.startSession()
                     dismissWindow(id: appModel.congratsWindowID)
                     dismissWindow(id: appModel.missionFailedWindowID)
+                    // Closing the last visible window can let visionOS
+                    // auto-recreate the default WindowGroup (the lobby).
+                    // Re-dismiss main to keep the user in immersive.
+                    dismissWindow(id: appModel.mainWindowID)
                 } else {
                     appModel.immersiveSpaceState = .inTransition
                     switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
@@ -306,6 +310,7 @@ struct CongratsView: View {
                         controller.startSession()
                         dismissWindow(id: appModel.congratsWindowID)
                         dismissWindow(id: appModel.missionFailedWindowID)
+                        dismissWindow(id: appModel.mainWindowID)
 
                     case .userCancelled, .error:
                         fallthrough
@@ -341,12 +346,14 @@ struct CongratsView: View {
 
             if appModel.immersiveSpaceState == .open {
                 controller.startSession()
+                dismissWindow(id: appModel.mainWindowID)
             } else {
                 appModel.immersiveSpaceState = .inTransition
                 switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                 case .opened:
                     appModel.immersiveSpaceState = .open
                     controller.startSession()
+                    dismissWindow(id: appModel.mainWindowID)
 
                 case .userCancelled, .error:
                     fallthrough
@@ -591,6 +598,7 @@ struct MissionFailedView: View {
                 case .opened:
                     appModel.immersiveSpaceState = .open
                     controller.startSession()
+                    dismissWindow(id: appModel.mainWindowID)
 
                 case .userCancelled, .error:
                     fallthrough
@@ -600,6 +608,7 @@ struct MissionFailedView: View {
                 }
             } else {
                 controller.startSession()
+                dismissWindow(id: appModel.mainWindowID)
             }
         }
     }
