@@ -22,6 +22,28 @@ private struct GazeTargetResult {
     let holdProgress: Float
 }
 
+private enum CalibrationCue: CaseIterable {
+    case right
+    case left
+    case both
+
+    var title: String {
+        switch self {
+        case .right: "Right hand"
+        case .left: "Left hand"
+        case .both: "Both hands"
+        }
+    }
+
+    var prompt: String {
+        switch self {
+        case .right: "Imagine reaching and pointing with your right hand."
+        case .left: "Imagine reaching and pointing with your left hand."
+        case .both: "Now imagine using both hands together."
+        }
+    }
+}
+
 struct ImmersiveView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
@@ -36,6 +58,9 @@ struct ImmersiveView: View {
     @State private var gazeHoverBeganAt: Date? = nil
     @State private var lastSeenArmAnimationTriggerCount: Int = 0
     @State private var handVisibilityToken: Int = 0
+    @State private var calibrationStartedAt: Date? = nil
+    @State private var calibrationCue: CalibrationCue = .right
+    @State private var calibrationCueIndex: Int = -1
 
     private final class BubbleEntityStore {
         var entities: [UUID: ModelEntity] = [:]
@@ -114,6 +139,12 @@ struct ImmersiveView: View {
                 root.addChild(startPanel)
             }
 
+            if let calibrationPanel = attachments.entity(for: "calibrationPanel") {
+                calibrationPanel.name = "CalibrationPanel"
+                calibrationPanel.position = SIMD3<Float>(0.0, 0.18, 0.02)
+                root.addChild(calibrationPanel)
+            }
+
             worldAnchor.addChild(root)
             content.add(worldAnchor)
             bubbleStore.worldAnchor = worldAnchor
@@ -174,14 +205,17 @@ struct ImmersiveView: View {
             let controller = appModel.gameController
 
             let isReadyStage = controller.sessionState == .ready
+            let isCalibrationStage = controller.sessionState == .calibrating
             handleArmAnimationTrigger(in: armsRoot, controller: controller)
             updateArmsRootTransform(armsRoot)
 
-            if isReadyStage {
+            if isReadyStage || isCalibrationStage {
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
-                hideAllHandPoses(in: armsRoot)
+                if isReadyStage {
+                    hideAllHandPoses(in: armsRoot)
+                }
                 updateGazeCursorAndMarker(
                     result: nil,
                     isVisible: false
@@ -215,6 +249,11 @@ struct ImmersiveView: View {
                 startPanel.position = startPanelPosition
             }
 
+            if let calibrationPanel = root.findEntity(named: "CalibrationPanel") {
+                calibrationPanel.isEnabled = isCalibrationStage
+                calibrationPanel.position = SIMD3<Float>(0.0, 0.18, 0.02)
+            }
+
             if let panel = root.findEntity(named: "ControlPanel") {
                 panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
                 panel.scale = SIMD3<Float>(repeating: 0.92)
@@ -228,6 +267,10 @@ struct ImmersiveView: View {
 
             Attachment(id: "startPanel") {
                 ImmersiveStartPanel(isHighlighted: startTargetHighlighted)
+            }
+
+            Attachment(id: "calibrationPanel") {
+                ImmersiveCalibrationPanel(cue: calibrationCue)
             }
 
             Attachment(id: "progressBar") {
@@ -271,6 +314,11 @@ struct ImmersiveView: View {
                 startTargetHighlighted = false
             }
 
+            if newState != .calibrating {
+                calibrationStartedAt = nil
+                calibrationCueIndex = -1
+            }
+
             guard newState == .finished else { return }
 
             Task { @MainActor in
@@ -300,6 +348,7 @@ struct ImmersiveView: View {
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
                 updatePreSessionStartInteraction()
+                updateCalibrationCue()
                 updateBackgroundPlane()
                 updateCursorEveryFrame()
 
@@ -517,6 +566,62 @@ struct ImmersiveView: View {
     }
 
     @MainActor
+    private func updateCalibrationCue() {
+        let controller = appModel.gameController
+
+        guard controller.sessionState == .calibrating,
+              let armsRoot = bubbleStore.armsAnchor?.findEntity(named: "ArmsRoot") else {
+            return
+        }
+
+        let now = Date()
+        if calibrationStartedAt == nil {
+            calibrationStartedAt = now
+            calibrationCueIndex = -1
+        }
+
+        guard let startedAt = calibrationStartedAt else { return }
+
+        let thinkDelay: TimeInterval = 3.0
+        let animationPlaybackWindow: TimeInterval = 2.0
+        let cueDuration = thinkDelay + animationPlaybackWindow
+        let elapsed = now.timeIntervalSince(startedAt)
+        let nextIndex = Int(elapsed / cueDuration)
+        let cues = CalibrationCue.allCases
+
+        guard nextIndex < cues.count else {
+            hideAllHandPoses(in: armsRoot)
+            controller.completeCalibration()
+            return
+        }
+
+        guard nextIndex != calibrationCueIndex else { return }
+
+        calibrationCueIndex = nextIndex
+        calibrationCue = cues[nextIndex]
+        handVisibilityToken += 1
+        let token = handVisibilityToken
+        hideAllHandPoses(in: armsRoot)
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(thinkDelay))
+            guard handVisibilityToken == token,
+                  controller.sessionState == .calibrating else { return }
+
+            switch calibrationCue {
+            case .right:
+                showHands([.right], in: armsRoot)
+
+            case .left:
+                showHands([.left], in: armsRoot)
+
+            case .both:
+                showHands([.left, .right], in: armsRoot)
+            }
+        }
+    }
+
+    @MainActor
     private func triggerSessionStart() {
         guard appModel.gameController.sessionState == .ready else { return }
         startHoverBeganAt = nil
@@ -598,17 +703,7 @@ struct ImmersiveView: View {
         handVisibilityToken += 1
         let token = handVisibilityToken
 
-        let targetName = handPoseName(for: arm)
-        armsRoot.isEnabled = true
-
-        for child in armsRoot.children {
-            child.isEnabled = child.name == targetName
-        }
-
-        if let pose = armsRoot.findEntity(named: targetName) {
-            pose.stopAllAnimations(recursive: true)
-            playAnimationIfAvailable(on: pose)
-        }
+        showHands([arm], in: armsRoot)
 
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
@@ -617,6 +712,22 @@ struct ImmersiveView: View {
         }
 
         return token
+    }
+
+    @MainActor
+    private func showHands(_ arms: [ActiveArm], in armsRoot: Entity) {
+        let targetNames = Set(arms.map(handPoseName(for:)))
+        armsRoot.isEnabled = true
+
+        for child in armsRoot.children {
+            child.isEnabled = targetNames.contains(child.name)
+        }
+
+        for name in targetNames {
+            guard let pose = armsRoot.findEntity(named: name) else { continue }
+            pose.stopAllAnimations(recursive: true)
+            playAnimationIfAvailable(on: pose)
+        }
     }
 
     private func visibleHand(in armsRoot: Entity) -> ActiveArm? {
@@ -854,6 +965,56 @@ struct ImmersiveView: View {
             m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
             entity.model?.materials = [m]
         }
+    }
+}
+
+// MARK: - Immersive Calibration Panel
+
+private struct ImmersiveCalibrationPanel: View {
+    let cue: CalibrationCue
+
+    private var cueIndex: Int {
+        CalibrationCue.allCases.firstIndex(of: cue) ?? 0
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Calibration")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 10) {
+                Text(cue.title)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(cue.prompt)
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(CalibrationCue.allCases.indices, id: \.self) { index in
+                    Capsule()
+                        .fill(index == cueIndex ? Color.green : Color.secondary.opacity(0.30))
+                        .frame(width: index == cueIndex ? 28 : 9, height: 9)
+                }
+            }
+            .frame(height: 12)
+
+            Text("Keep your body still and focus only on the imagined movement.")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 30)
+        .padding(.vertical, 26)
+        .frame(width: 420)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
     }
 }
 
