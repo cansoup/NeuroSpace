@@ -28,6 +28,9 @@ final class AppModel {
     var shouldEndSession = false
     var debugMode: Bool = true
     var selectedEnvironment: EnvironmentChoice = .deepSpace
+    /// When false the cursor dot and hold marker are hidden during gameplay.
+    /// BCI targeting and HoverEffectComponent highlighting still work normally.
+    var showCursor: Bool = true
     var hasCompletedOnboarding: Bool = false
 
     var gameController = BubbleGameController()
