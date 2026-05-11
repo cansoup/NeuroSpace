@@ -524,11 +524,12 @@ struct ImmersiveView: View {
 
         let gazeResult = currentHeadRayTargetResult(from: controller.bubbles)
 
-        // Keep controller target fresh every frame regardless of BCI activity
+        // BCI targeting always runs — bubbles still respond to EEG signals
+        // and HoverEffectComponent highlighting still works regardless of cursor visibility.
         controller.targetedBubbleID = gazeResult.bubble?.id
 
-        // Directly update entity positions — no SwiftUI state change needed
-        updateGazeCursorAndMarker(result: gazeResult, isVisible: true)
+        // Cursor and hold marker only render when showCursor is enabled
+        updateGazeCursorAndMarker(result: gazeResult, isVisible: appModel.showCursor)
     }
 
     // MARK: - Pre-session start interaction

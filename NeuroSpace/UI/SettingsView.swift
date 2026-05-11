@@ -588,6 +588,18 @@ private struct ImmersivePanel: View {
                     ])
                 }
             }
+
+            SectionCard(title: "Cursor") {
+                @Bindable var appModel = appModel
+                SettingRowView(
+                    icon: "◎",
+                    label: "Show Cursor",
+                    desc: "Display the gaze dot during gameplay. Disable for a cleaner experience — bubbles still highlight and EEG targeting works normally.",
+                    divider: false
+                ) {
+                    ToggleSwitch(value: $appModel.showCursor)
+                }
+            }
         }
     }
 
