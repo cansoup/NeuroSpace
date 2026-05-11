@@ -4,12 +4,18 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var appModel
     let onContinue: () -> Void
 
-    @State private var defaultHost: String =
+    @State private var host: String =
         (Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_HOST") as? String) ?? "192.168.1.10"
-    @State private var defaultPort: Int =
-        Int((Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_PORT") as? String) ?? "8765") ?? 8765
+    @State private var portText: String =
+        (Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_PORT") as? String) ?? "8765"
+
+    private var port: Int { Int(portText) ?? 8765 }
 
     private var isConnected: Bool { appModel.isEEGConnected }
+    private var isConnecting: Bool {
+        if case .connecting = appModel.bciClient.state { return true }
+        return false
+    }
 
     var body: some View {
         ZStack {
@@ -24,7 +30,12 @@ struct OnboardingView: View {
                     .padding(.bottom, 18)
 
                 connectTile
-                    .padding(.bottom, 20)
+                    .padding(.bottom, isConnected ? 14 : 20)
+
+                if isConnected {
+                    BCILiveStreamView()
+                        .padding(.bottom, 18)
+                }
 
                 footer
             }
@@ -122,32 +133,39 @@ struct OnboardingView: View {
     // MARK: - Connect tile
 
     private var connectTile: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(DS.teal.opacity(0.12))
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(DS.teal.opacity(0.30), lineWidth: 1)
-                Image(systemName: "brain.head.profile")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(DS.teal)
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(DS.teal.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(DS.teal.opacity(0.30), lineWidth: 1)
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(DS.teal)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Connect your EEG headset")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(DS.textPrimary)
+                    Text(connectSubtitle)
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(DS.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 12)
+
+                statusControl
             }
-            .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Connect your EEG headset")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(DS.textPrimary)
-                Text(connectSubtitle)
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(DS.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            HStack(spacing: 8) {
+                hostField
+                portField
             }
-
-            Spacer(minLength: 12)
-
-            statusControl
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -158,16 +176,66 @@ struct OnboardingView: View {
         )
     }
 
+    private var hostField: some View {
+        HStack(spacing: 6) {
+            Text("HOST")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(DS.textTertiary)
+            TextField("192.168.x.y", text: $host)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(DS.textPrimary)
+                .autocorrectionDisabled(true)
+                .textInputAutocapitalization(.never)
+                .disabled(isConnecting)
+                .onSubmit { connect() }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
+    }
+
+    private var portField: some View {
+        HStack(spacing: 6) {
+            Text("PORT")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(DS.textTertiary)
+            TextField("8765", text: $portText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(DS.textPrimary)
+                .autocorrectionDisabled(true)
+                .keyboardType(.numberPad)
+                .disabled(isConnecting)
+                .onSubmit { connect() }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(width: 130)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
+    }
+
     private var connectSubtitle: String {
         switch appModel.bciClient.state {
         case .connected:
-            return "Pair your BCI device with Vision Pro to begin"
+            return "Receiving predictions from \(host):\(port)"
         case .connecting:
-            return "Connecting to \(defaultHost):\(defaultPort)…"
+            return "Connecting to \(host):\(port)…"
         case .failed(let msg):
             return "Failed: \(msg)"
         case .disconnected:
-            return "Pair your BCI device with Vision Pro to begin"
+            return "Enter the bridge_server IP and tap Connect"
         }
     }
 
@@ -211,7 +279,7 @@ struct OnboardingView: View {
     }
 
     private func connect() {
-        appModel.bciClient.connect(host: defaultHost, port: defaultPort)
+        appModel.bciClient.connect(host: host, port: port)
     }
 }
 

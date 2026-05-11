@@ -40,6 +40,8 @@ final class AppModel {
 
     init() {
         jsonPlayback = JSONPlaybackManager(controller: gameController)
+        // Wire predictions arriving over WebSocket into arm movement.
+        bciClient.armMapper = BCIArmMapper(controller: gameController)
     }
 
     var isEEGConnected: Bool {

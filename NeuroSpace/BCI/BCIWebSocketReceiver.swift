@@ -29,6 +29,8 @@ final class BCIWebSocketClient {
     var state: ConnectionState = .disconnected
     var lastIntent: String = "-"
     var lastConfidence: Double = 0
+    var lastPrediction: BCIPredictionMessage? = nil
+    var predictionHistory: [BCIPredictionMessage] = []   // newest last, capped
     var logLines: [String] = []
 
     var armMapper: BCIArmMapper?
@@ -163,15 +165,17 @@ final class BCIWebSocketClient {
     private func route(prediction: BCIPredictionMessage) {
         lastIntent = prediction.predictedClass.rawValue
         lastConfidence = prediction.confidence
-
-        guard prediction.aboveThreshold else {
-            appendLog("Ignored \(prediction.predictedClass.rawValue): below threshold")
-            sendControlMessage(.idle, confidence: prediction.confidence)
-            return
+        lastPrediction = prediction
+        predictionHistory.append(prediction)
+        if predictionHistory.count > 30 {
+            predictionHistory.removeFirst(predictionHistory.count - 30)
         }
 
-        guard prediction.confidence >= minimumConfidence else {
-            appendLog("Ignored \(prediction.predictedClass.rawValue): confidence \(String(format: "%.2f", prediction.confidence)) < \(minimumConfidence)")
+        // Trust the server-side gating: it already decided whether the
+        // prediction crossed its threshold. Only ignore when the server
+        // explicitly tells us not to act (above_threshold == false).
+        guard prediction.aboveThreshold else {
+            appendLog("Ignored \(prediction.predictedClass.rawValue): server marked below threshold")
             sendControlMessage(.idle, confidence: prediction.confidence)
             return
         }

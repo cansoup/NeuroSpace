@@ -662,7 +662,7 @@ struct ImmersiveView: View {
         let yaw: Float = arm == .left ? -.pi / 14 : .pi / 14
 
         return ArmVisualTransform(
-            position: SIMD3<Float>(xOffset, -0.30, -0.30),
+            position: SIMD3<Float>(xOffset, -0.34, -0.30),
             scale: baseScale,
             orientation: baseOrientation * simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
         )
