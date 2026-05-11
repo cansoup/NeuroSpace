@@ -161,7 +161,7 @@ struct OnboardingView: View {
     private var connectSubtitle: String {
         switch appModel.bciClient.state {
         case .connected:
-            return "Pair your BCI device with Vision Pro to begin"
+            return "EEG headset connected — ready to begin"
         case .connecting:
             return "Connecting to \(defaultHost):\(defaultPort)…"
         case .failed(let msg):
@@ -205,8 +205,15 @@ struct OnboardingView: View {
                     .foregroundStyle(isConnected ? DS.success : DS.textTertiary)
             }
             Spacer()
-            // TODO: re-enable gating once EEG flow is wired — `disabled: !isConnected`
-            ContinueButton(disabled: false, action: onContinue)
+            // DEV ONLY — remove before release
+            if appModel.debugMode {
+                Button("Skip") { onContinue() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DS.textTertiary)
+                    .padding(.trailing, 12)
+            }
+            ContinueButton(disabled: !isConnected, action: onContinue)
         }
     }
 
