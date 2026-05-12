@@ -12,6 +12,16 @@ struct NeuroSpaceApp: App {
 
     @State private var appModel = AppModel()
 
+    /// `.mixed` (real-world passthrough) for None/Passthrough envs,
+    /// `.full` otherwise. Reading `selectedEnvironment` makes the App body
+    /// re-render when the user changes env, swapping the immersion style.
+    private var immersionStyle: any ImmersionStyle {
+        switch appModel.selectedEnvironment {
+        case .none, .passthrough: return .mixed
+        default:                  return .full
+        }
+    }
+
     var body: some Scene {
         WindowGroup(id: appModel.mainWindowID) {
             ContentView()
@@ -37,7 +47,7 @@ struct NeuroSpaceApp: App {
             LobbySkyboxView()
                 .environment(appModel)
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
+        .immersionStyle(selection: .constant(immersionStyle), in: .full, .mixed)
 
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()
@@ -49,6 +59,6 @@ struct NeuroSpaceApp: App {
                     appModel.immersiveSpaceState = .closed
                 }
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
+        .immersionStyle(selection: .constant(immersionStyle), in: .full, .mixed)
     }
 }
