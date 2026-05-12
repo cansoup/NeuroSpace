@@ -14,6 +14,8 @@ struct CongratsView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
+    @State private var didAutoAdvance = false
+
     private var controller: BubbleGameController { appModel.gameController }
 
     private var canProceed: Bool {
@@ -67,6 +69,16 @@ struct CongratsView: View {
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
             dismissWindow(id: appModel.congratsWindowID)
+        }
+        .onChange(of: controller.armAnimationTriggerCount) { _, _ in
+            // Auto-press the primary "Next Stage" button when BCI predicts
+            // "both" while the stage-cleared window is open and the player
+            // is eligible to advance.
+            guard !didAutoAdvance,
+                  canProceed,
+                  controller.armAnimationPrediction == PredictedClass.both else { return }
+            didAutoAdvance = true
+            primaryAction()
         }
     }
 
