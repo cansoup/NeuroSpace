@@ -39,9 +39,6 @@ struct LobbySkyboxView: View {
         case .deepSpace:
             anchor.addChild(makeStarField())
 
-        case .aurora:
-            anchor.addChild(makeAuroraSky())
-
         case .forest, .clearNight, .garden:
             if let sphere = await makeHDRSkybox(named: env.hdrAssetName ?? "") {
                 anchor.addChild(sphere)
@@ -51,6 +48,10 @@ struct LobbySkyboxView: View {
                 // visibly switches.
                 anchor.addChild(makeFallbackSky(for: env))
             }
+
+        case .none:
+            // Render no skybox content — a dark, empty space.
+            break
 
         case .passthrough:
             // Render no skybox content. Note: true passthrough requires
@@ -101,44 +102,6 @@ struct LobbySkyboxView: View {
         }
 
         return starField
-    }
-
-    // MARK: - Procedural: Aurora gradient + soft glow
-
-    private func makeAuroraSky() -> Entity {
-        let root = Entity()
-        root.name = "AuroraSky"
-
-        // Inverted sphere with a vertical gradient tint
-        let mesh = MeshResource.generateSphere(radius: 50)
-        var material = UnlitMaterial()
-        material.color = .init(tint: UIColor(red: 0.06, green: 0.04, blue: 0.18, alpha: 1.0))
-        let sky = ModelEntity(mesh: mesh, materials: [material])
-        sky.scale = SIMD3<Float>(-1, 1, 1)
-        root.addChild(sky)
-
-        // A few translucent emerald/violet ribbons rendered as oriented planes
-        let ribbonColors: [UIColor] = [
-            UIColor(red: 0.15, green: 0.85, blue: 0.55, alpha: 0.35),
-            UIColor(red: 0.45, green: 0.40, blue: 0.95, alpha: 0.30),
-            UIColor(red: 0.20, green: 0.95, blue: 0.85, alpha: 0.25)
-        ]
-
-        for (i, color) in ribbonColors.enumerated() {
-            var ribbonMaterial = UnlitMaterial()
-            ribbonMaterial.color = .init(tint: color)
-            ribbonMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.7))
-
-            let ribbon = ModelEntity(
-                mesh: .generatePlane(width: 30, height: 6),
-                materials: [ribbonMaterial]
-            )
-            ribbon.position = SIMD3<Float>(0, Float(2 + i), -8 - Float(i) * 2)
-            ribbon.transform.rotation = simd_quatf(angle: Float(i) * 0.2, axis: [0, 1, 0])
-            root.addChild(ribbon)
-        }
-
-        return root
     }
 
     // MARK: - HDR / 360° image skybox
