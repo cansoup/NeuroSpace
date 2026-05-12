@@ -16,21 +16,27 @@ struct LobbySkyboxView: View {
             let anchor = AnchorEntity(world: .zero)
             anchor.name = "SkyboxAnchor"
             content.add(anchor)
-            await rebuild(anchor: anchor, for: appModel.selectedEnvironment)
+            await SkyboxBuilder.rebuild(anchor: anchor, for: appModel.selectedEnvironment)
         } update: { content in
             guard let anchor = content.entities.first(where: { $0.name == "SkyboxAnchor" })
             else { return }
 
             let env = appModel.selectedEnvironment
             Task { @MainActor in
-                await rebuild(anchor: anchor, for: env)
+                await SkyboxBuilder.rebuild(anchor: anchor, for: env)
             }
         }
     }
+}
 
+// MARK: - Shared skybox builder
+
+/// Builds and swaps the skybox entity tree for an `EnvironmentChoice` under a
+/// given anchor. Shared between the lobby skybox preview and the in-game
+/// immersive scene so both screens render the same environment.
+enum SkyboxBuilder {
     @MainActor
-    private func rebuild(anchor: Entity, for env: EnvironmentChoice) async {
-        // Tear down previous skybox children
+    static func rebuild(anchor: Entity, for env: EnvironmentChoice) async {
         for child in anchor.children {
             child.removeFromParent()
         }
@@ -62,7 +68,7 @@ struct LobbySkyboxView: View {
 
     // MARK: - Procedural: Deep Space starfield
 
-    private func makeStarField() -> Entity {
+    private static func makeStarField() -> Entity {
         let starField = Entity()
         starField.name = "StarField"
 
@@ -106,7 +112,7 @@ struct LobbySkyboxView: View {
 
     // MARK: - HDR / 360° image skybox
 
-    private func makeHDRSkybox(named name: String) async -> Entity? {
+    private static func makeHDRSkybox(named name: String) async -> Entity? {
         guard !name.isEmpty else { return nil }
 
         let texture = await loadTexture(named: name)
@@ -127,8 +133,7 @@ struct LobbySkyboxView: View {
 
     /// Tries the Reality Composer Pro package bundle first (where rkassets
     /// live), then the main app bundle as a fallback.
-    private func loadTexture(named name: String) async -> TextureResource? {
-        // 1) RealityKitContent package bundle
+    private static func loadTexture(named name: String) async -> TextureResource? {
         do {
             let texture = try await TextureResource(named: name, in: realityKitContentBundle)
             print("[Skybox] Loaded '\(name)' from realityKitContentBundle")
@@ -137,7 +142,6 @@ struct LobbySkyboxView: View {
             print("[Skybox] realityKitContentBundle miss for '\(name)': \(error.localizedDescription)")
         }
 
-        // 2) Main app bundle
         do {
             let texture = try await TextureResource(named: name)
             print("[Skybox] Loaded '\(name)' from main bundle")
@@ -151,7 +155,7 @@ struct LobbySkyboxView: View {
 
     // MARK: - Fallback: solid gradient sphere
 
-    private func makeFallbackSky(for env: EnvironmentChoice) -> Entity {
+    private static func makeFallbackSky(for env: EnvironmentChoice) -> Entity {
         let (c1, _) = env.swatchHex
         let mesh = MeshResource.generateSphere(radius: 50)
         var material = UnlitMaterial()
