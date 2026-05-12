@@ -50,8 +50,6 @@ struct ImmersiveView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
-    @State private var startHoverBeganAt: Date? = nil
-    @State private var startTargetHighlighted = false
     @State private var clickCount: Int = 0
 
     @State private var gazeHoverBubbleID: UUID? = nil
@@ -82,9 +80,6 @@ struct ImmersiveView: View {
     private let worldAnchorOffset = SIMD3<Float>(0, 1.45, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
 
-    private let startOrbPosition = SIMD3<Float>(0.0, -0.06, 0.02)
-    private let startPanelPosition = SIMD3<Float>(0.0, 0.20, 0.02)
-
     // How close (metres) the head ray must pass to a bubble to select it
     private let gazeSelectRadius: Float = 0.11
     private let gazeDwellDuration: TimeInterval = 0.65
@@ -109,13 +104,6 @@ struct ImmersiveView: View {
             root.addChild(bgEntity)
             bubbleStore.backgroundPlane = bgEntity
 
-            let startOrb = makeStartOrbEntity(
-                name: "StartOrb",
-                position: startOrbPosition,
-                highlighted: false
-            )
-            root.addChild(startOrb)
-
             let gazeCursor = makeGazeCursorEntity()
             gazeCursor.name = "GazeCursor"
             gazeCursor.isEnabled = false
@@ -133,12 +121,6 @@ struct ImmersiveView: View {
                 panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
                 panel.scale = SIMD3<Float>(repeating: 0.92)
                 root.addChild(panel)
-            }
-
-            if let startPanel = attachments.entity(for: "startPanel") {
-                startPanel.name = "StartPanel"
-                startPanel.position = startPanelPosition
-                root.addChild(startPanel)
             }
 
             if let calibrationPanel = attachments.entity(for: "calibrationPanel") {
@@ -209,7 +191,6 @@ struct ImmersiveView: View {
             guard
                 let worldAnchor = content.entities.first(where: { $0.name == "WorldAnchor" }),
                 let root = worldAnchor.findEntity(named: "Root"),
-                let startOrb = root.findEntity(named: "StartOrb") as? ModelEntity,
                 let armsAnchor = content.entities.first(where: { $0.name == "ArmsAnchor" }),
                 let armsRoot = armsAnchor.findEntity(named: "ArmsRoot")
             else { return }
@@ -240,18 +221,14 @@ struct ImmersiveView: View {
                 bubbleStore.lastSeenPopCount = controller.popCount
             }
 
-            let isReadyStage = controller.sessionState == .ready
             let isCalibrationStage = controller.sessionState == .calibrating
             handleArmAnimationTrigger(in: armsRoot, controller: controller)
             updateArmsRootTransform(armsRoot)
 
-            if isReadyStage || isCalibrationStage {
+            if isCalibrationStage {
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
-                if isReadyStage {
-                    hideAllHandPoses(in: armsRoot)
-                }
                 updateGazeCursorAndMarker(
                     result: nil,
                     isVisible: false
@@ -267,22 +244,6 @@ struct ImmersiveView: View {
                     with: controller.bubbles,
                     highlightedID: controller.targetedBubbleID
                 )
-            }
-
-            let showStartTarget = isReadyStage
-
-            startOrb.isEnabled = showStartTarget
-            startOrb.position = startOrbPosition
-
-            updateStartOrbAppearance(
-                startOrb,
-                highlighted: startTargetHighlighted,
-                visible: showStartTarget
-            )
-
-            if let startPanel = root.findEntity(named: "StartPanel") {
-                startPanel.isEnabled = showStartTarget
-                startPanel.position = startPanelPosition
             }
 
             if let calibrationPanel = root.findEntity(named: "CalibrationPanel") {
@@ -301,10 +262,6 @@ struct ImmersiveView: View {
                     .environment(appModel)
             }
 
-            Attachment(id: "startPanel") {
-                ImmersiveStartPanel(isHighlighted: startTargetHighlighted)
-            }
-
             Attachment(id: "calibrationPanel") {
                 ImmersiveCalibrationPanel(cue: calibrationCue)
             }
@@ -319,12 +276,6 @@ struct ImmersiveView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in
                     let name = value.entity.name
-
-                    if name == "StartOrb",
-                       appModel.gameController.sessionState == .ready {
-                        triggerSessionStart()
-                        return
-                    }
 
                     guard appModel.gameController.sessionState == .playing else { return }
 
@@ -345,11 +296,6 @@ struct ImmersiveView: View {
                 }
         )
         .onChange(of: appModel.gameController.sessionState) { _, newState in
-            if newState != .ready {
-                startHoverBeganAt = nil
-                startTargetHighlighted = false
-            }
-
             if newState != .calibrating {
                 calibrationStartedAt = nil
                 calibrationCueIndex = -1
@@ -383,7 +329,6 @@ struct ImmersiveView: View {
 
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
-                updatePreSessionStartInteraction()
                 updateCalibrationCue()
                 updateBackgroundPlane()
                 updateCursorEveryFrame()
@@ -402,8 +347,6 @@ struct ImmersiveView: View {
 
             Task { @MainActor in
                 appModel.gameController.resetGame()
-                startHoverBeganAt = nil
-                startTargetHighlighted = false
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
                 clickCount = 0
@@ -568,40 +511,6 @@ struct ImmersiveView: View {
         updateGazeCursorAndMarker(result: gazeResult, isVisible: appModel.showCursor)
     }
 
-    // MARK: - Pre-session start interaction
-
-    @MainActor
-    private func updatePreSessionStartInteraction() {
-        let controller = appModel.gameController
-
-        guard controller.sessionState == .ready else {
-            startHoverBeganAt = nil
-            startTargetHighlighted = false
-            return
-        }
-
-        let activeTip = controller.activeArm == .left
-            ? controller.leftArmState.tipPosition
-            : controller.rightArmState.tipPosition
-
-        let distance = simd_distance(activeTip, startOrbPosition)
-        let hoverRadius: Float = 0.10
-        let dwellDuration: TimeInterval = 0.45
-
-        if distance <= hoverRadius {
-            startTargetHighlighted = true
-            if startHoverBeganAt == nil {
-                startHoverBeganAt = Date()
-            } else if let began = startHoverBeganAt,
-                      Date().timeIntervalSince(began) >= dwellDuration {
-                triggerSessionStart()
-            }
-        } else {
-            startHoverBeganAt = nil
-            startTargetHighlighted = false
-        }
-    }
-
     @MainActor
     private func updateCalibrationCue() {
         let controller = appModel.gameController
@@ -656,14 +565,6 @@ struct ImmersiveView: View {
                 showHands([.left, .right], in: armsRoot)
             }
         }
-    }
-
-    @MainActor
-    private func triggerSessionStart() {
-        guard appModel.gameController.sessionState == .ready else { return }
-        startHoverBeganAt = nil
-        startTargetHighlighted = false
-        appModel.gameController.startSession()
     }
 
     // MARK: - Hand animation helpers
@@ -950,30 +851,6 @@ struct ImmersiveView: View {
         bubbleStore.entities.removeAll()
     }
 
-    private func makeStartOrbEntity(name: String, position: SIMD3<Float>, highlighted: Bool) -> ModelEntity {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
-        m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
-        let entity = ModelEntity(mesh: .generateSphere(radius: highlighted ? 0.055 : 0.045), materials: [m])
-        entity.name = name
-        entity.position = position
-        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.06)]))
-        entity.components.set(InputTargetComponent())
-        return entity
-    }
-
-    private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
-        entity.scale = visible
-            ? SIMD3<Float>(repeating: highlighted ? 1.18 : 1.0)
-            : SIMD3<Float>(repeating: 0.001)
-
-        if var m = entity.model?.materials.first as? PhysicallyBasedMaterial {
-            m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
-            m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
-            entity.model?.materials = [m]
-        }
-    }
-
     /// Spawn a transient spatial-audio entity at the popped-bubble position,
     /// play the pop sound, and clean up shortly after.
     @MainActor
@@ -1048,28 +925,3 @@ private struct ImmersiveCalibrationPanel: View {
     }
 }
 
-// MARK: - Immersive Start Panel
-
-struct ImmersiveStartPanel: View {
-    let isHighlighted: Bool
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text("Ready to Begin?")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-
-            Text("Move the active arm onto the glowing orb to start.")
-                .font(.system(size: 13, weight: .medium))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-
-            Text(isHighlighted ? "Hold steady..." : "Awaiting arm input")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(isHighlighted ? .green : .purple)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .frame(width: 260)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-    }
-}

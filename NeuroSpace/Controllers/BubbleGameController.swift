@@ -86,12 +86,12 @@ final class BubbleGameController {
 
     func completeCalibration() {
         guard sessionState == .calibrating else { return }
-        sessionState = .ready
         activeArm = .right
         currentIntent = .idle
         targetDirection = .zero
         filteredDirection = .zero
         targetedBubbleID = nil
+        startSession()
     }
 
     func startSession() {
@@ -130,7 +130,7 @@ final class BubbleGameController {
         }
 
         currentIntent = .idle
-        sessionState = .ready
+        sessionState = .idle
         activeArm = .right
         score = 0
         hitCount = 0
@@ -204,7 +204,7 @@ final class BubbleGameController {
         finishReason = nil
         targetDirection = .zero
         filteredDirection = .zero
-        sessionState = .ready
+        sessionState = .idle
         remainingSeconds = stageConfig.duration
         targetedBubbleID = nil
 
@@ -394,7 +394,7 @@ final class BubbleGameController {
     // MARK: - Per-frame update
 
     func update(deltaTime: Float) {
-        guard sessionState == .playing || sessionState == .ready else { return }
+        guard sessionState == .playing else { return }
 
         let speedFactor = simd_length(targetDirection) > 0 ? acceleration : deceleration
         let targetVelocity = targetDirection * maxSpeed
