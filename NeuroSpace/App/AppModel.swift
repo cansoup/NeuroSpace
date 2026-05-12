@@ -32,8 +32,9 @@ final class AppModel {
     /// BCI targeting and HoverEffectComponent highlighting still work normally.
     var showCursor: Bool = true
     var hasCompletedOnboarding: Bool = false
-    /// When true, the immersive space is open purely to preview the environment
-    /// (from Settings → Immersive). All game-side UI is suppressed.
+    /// True while the lobby skybox immersive space is open as an environment
+    /// preview from Settings → Immersive. Used by ImmersivePanel to gate
+    /// open/dismiss so the preview doesn't fight with normal game flow.
     var isPreviewingEnvironment: Bool = false
 
     var gameController = BubbleGameController()

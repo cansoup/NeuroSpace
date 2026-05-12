@@ -605,20 +605,27 @@ private struct ImmersivePanel: View {
         }
         .onAppear { openPreviewImmersive() }
         .onDisappear { dismissPreviewImmersive() }
+        .onChange(of: appModel.selectedEnvironment) { _, newEnv in
+            if newEnv == .none {
+                dismissPreviewImmersive()
+            } else {
+                openPreviewImmersive()
+            }
+        }
     }
 
     private func openPreviewImmersive() {
         Task { @MainActor in
-            guard appModel.immersiveSpaceState == .closed else { return }
+            guard !appModel.isPreviewingEnvironment,
+                  appModel.immersiveSpaceState == .closed,
+                  appModel.selectedEnvironment != .none else { return }
             appModel.isPreviewingEnvironment = true
-            appModel.immersiveSpaceState = .inTransition
-            switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+            switch await openImmersiveSpace(id: appModel.lobbySkyboxID) {
             case .opened:
-                appModel.immersiveSpaceState = .open
+                break
             case .userCancelled, .error:
                 fallthrough
             @unknown default:
-                appModel.immersiveSpaceState = .closed
                 appModel.isPreviewingEnvironment = false
             }
         }
@@ -626,13 +633,8 @@ private struct ImmersivePanel: View {
 
     private func dismissPreviewImmersive() {
         Task { @MainActor in
-            guard appModel.immersiveSpaceState == .open else {
-                appModel.isPreviewingEnvironment = false
-                return
-            }
-            appModel.immersiveSpaceState = .inTransition
+            guard appModel.isPreviewingEnvironment else { return }
             await dismissImmersiveSpace()
-            appModel.immersiveSpaceState = .closed
             appModel.isPreviewingEnvironment = false
         }
     }
