@@ -54,11 +54,11 @@ struct CongratsView: View {
         .padding(.bottom, 26)
         .frame(width: 400)
         .background(
-            Color(red: 0.031, green: 0.055, blue: 0.110).opacity(0.85),
-            in: RoundedRectangle(cornerRadius: 24)
+            Color(hex: 0x080E1C, alpha: 0.75),
+            in: RoundedRectangle(cornerRadius: DS.radiusXl)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: DS.radiusXl)
                 .strokeBorder(
                     canProceed ? DS.teal.opacity(0.25) : DS.warning.opacity(0.30),
                     lineWidth: 1
@@ -127,10 +127,10 @@ struct CongratsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.innerBg, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: DS.radiusXl))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(DS.innerBorder, lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.radiusXl)
+                .strokeBorder(DS.teal.opacity(0.2), lineWidth: 1)
         )
     }
 
@@ -403,11 +403,11 @@ struct MissionFailedView: View {
         .padding(.bottom, 26)
         .frame(width: 400)
         .background(
-            Color(red: 0.031, green: 0.055, blue: 0.110).opacity(0.85),
-            in: RoundedRectangle(cornerRadius: 24)
+            Color(hex: 0x080E1C, alpha: 0.75),
+            in: RoundedRectangle(cornerRadius: DS.radiusXl)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: DS.radiusXl)
                 .strokeBorder(DS.error.opacity(0.30), lineWidth: 1)
         )
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
@@ -478,10 +478,10 @@ struct MissionFailedView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.innerBg, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: DS.radiusXl))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(DS.innerBorder, lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.radiusXl)
+                .strokeBorder(DS.teal.opacity(0.2), lineWidth: 1)
         )
     }
 
@@ -811,7 +811,11 @@ struct GameControlPanel: View {
             }
         }
         .frame(width: 340)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+        .background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: DS.radiusXl))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.radiusXl)
+                .strokeBorder(DS.teal.opacity(0.2), lineWidth: 1)
+        )
     }
 }
 
@@ -851,7 +855,11 @@ struct BubbleProgressBar: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .frame(width: 260)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: DS.radiusXl))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.radiusXl)
+                    .strokeBorder(DS.teal.opacity(0.2), lineWidth: 1)
+            )
             .transition(.opacity)
         }
     }

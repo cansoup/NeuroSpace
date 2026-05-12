@@ -146,7 +146,7 @@ struct SettingsView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 16)
         .frame(maxHeight: .infinity)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 
     // MARK: Content
@@ -378,7 +378,7 @@ private struct SectionCard<Content: View>: View {
         .padding(.horizontal, 22)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 }
 
@@ -691,7 +691,7 @@ private struct AboutPanel: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 24)
             .padding(.vertical, 28)
-            .glassCard(radius: DS.radiusLg)
+            .tealGlassCard()
 
             SectionCard(title: "Team") {
                 aboutRow("Research", "Neural Rehabilitation Lab", divider: true)
