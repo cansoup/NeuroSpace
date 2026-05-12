@@ -62,10 +62,11 @@ struct ImmersiveView: View {
     @State private var calibrationCue: CalibrationCue = .right
     @State private var calibrationCueIndex: Int = -1
     @State private var lastSkyboxEnv: EnvironmentChoice? = nil
-
+    @State private var popSoundResource: AudioFileResource? = nil
     private final class BubbleEntityStore {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
+        var lastSeenPopCount: Int = 0
         weak var worldAnchor: AnchorEntity?
         weak var armsAnchor: AnchorEntity?
         weak var backgroundPlane: Entity?
@@ -157,6 +158,13 @@ struct ImmersiveView: View {
             lastSkyboxEnv = initialEnv
             await SkyboxBuilder.rebuild(anchor: skyboxAnchor, for: initialEnv)
 
+            do {
+                popSoundResource = try await AudioFileResource(named: "pop")
+            } catch {
+                print("[Audio] pop sound resource not found: \(error.localizedDescription)")
+            }
+            bubbleStore.lastSeenPopCount = appModel.gameController.popCount
+
             let armsAnchor = AnchorEntity(.head, trackingMode: .continuous)
             armsAnchor.name = "ArmsAnchor"
             bubbleStore.armsAnchor = armsAnchor
@@ -216,6 +224,21 @@ struct ImmersiveView: View {
             }
 
             let controller = appModel.gameController
+
+            if controller.popCount > bubbleStore.lastSeenPopCount {
+                let prev = bubbleStore.lastSeenPopCount
+                bubbleStore.lastSeenPopCount = controller.popCount
+                print("[PopSound] popCount diff \(prev) → \(controller.popCount), state=\(controller.sessionState.rawValue)")
+                if controller.sessionState == .playing,
+                   let resource = popSoundResource,
+                   let position = controller.lastPoppedBubblePosition {
+                    playPopSound(at: position, parent: root, resource: resource)
+                }
+            } else if controller.popCount < bubbleStore.lastSeenPopCount {
+                // popCount reset (resetGame) — re-sync without playing a sound
+                print("[PopSound] popCount reset \(bubbleStore.lastSeenPopCount) → \(controller.popCount), resyncing")
+                bubbleStore.lastSeenPopCount = controller.popCount
+            }
 
             let isReadyStage = controller.sessionState == .ready
             let isCalibrationStage = controller.sessionState == .calibrating
@@ -948,6 +971,29 @@ struct ImmersiveView: View {
             m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
             m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
             entity.model?.materials = [m]
+        }
+    }
+
+    /// Spawn a transient spatial-audio entity at the popped-bubble position,
+    /// play the pop sound, and clean up shortly after.
+    @MainActor
+    private func playPopSound(at position: SIMD3<Float>, parent: Entity, resource: AudioFileResource) {
+        let id = UUID().uuidString.prefix(8)
+        let t = CACurrentMediaTime()
+        let activeBefore = parent.children.filter { $0.name == "PopSound" }.count
+        print("[PopSound] play id=\(id) pos=(\(position.x),\(position.y),\(position.z)) t=\(String(format: "%.3f", t)) activeBefore=\(activeBefore)")
+
+        let audioEntity = Entity()
+        audioEntity.name = "PopSound"
+        audioEntity.position = position
+        audioEntity.spatialAudio = SpatialAudioComponent()
+        parent.addChild(audioEntity)
+        audioEntity.playAudio(resource)
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            audioEntity.removeFromParent()
+            print("[PopSound] cleanup id=\(id) t=\(String(format: "%.3f", CACurrentMediaTime()))")
         }
     }
 }

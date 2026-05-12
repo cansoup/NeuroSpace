@@ -25,6 +25,9 @@ final class BubbleGameController {
     var targetedBubbleID: UUID? = nil
 
     private(set) var popCount: Int = 0
+    /// Position (root-local coordinates) of the most recently popped bubble.
+    /// Used by ImmersiveView to spawn a spatial pop sound at the right place.
+    private(set) var lastPoppedBubblePosition: SIMD3<Float>? = nil
 
     var currentStage: Int = 1
     var targetBubbleColor: String = "Pink"
@@ -588,6 +591,7 @@ final class BubbleGameController {
     private func registerBubblePop(at index: Int) {
         guard bubbles.indices.contains(index), !bubbles[index].isGone else { return }
 
+        lastPoppedBubblePosition = bubbles[index].position
         bubbles[index].isPopped = true
         score += bubbles[index].type.points
         hitCount += 1
