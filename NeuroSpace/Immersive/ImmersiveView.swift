@@ -204,12 +204,18 @@ struct ImmersiveView: View {
 
             let controller = appModel.gameController
 
-            let isReadyStage = controller.sessionState == .ready
-            let isCalibrationStage = controller.sessionState == .calibrating
-            handleArmAnimationTrigger(in: armsRoot, controller: controller)
-            updateArmsRootTransform(armsRoot)
+            let isPreviewing = appModel.isPreviewingEnvironment
+            let isReadyStage = !isPreviewing && controller.sessionState == .ready
+            let isCalibrationStage = !isPreviewing && controller.sessionState == .calibrating
 
-            if isReadyStage || isCalibrationStage {
+            if isPreviewing {
+                hideAllHandPoses(in: armsRoot)
+            } else {
+                handleArmAnimationTrigger(in: armsRoot, controller: controller)
+                updateArmsRootTransform(armsRoot)
+            }
+
+            if isPreviewing || isReadyStage || isCalibrationStage {
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
@@ -255,6 +261,7 @@ struct ImmersiveView: View {
             }
 
             if let panel = root.findEntity(named: "ControlPanel") {
+                panel.isEnabled = !isPreviewing
                 panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
                 panel.scale = SIMD3<Float>(repeating: 0.92)
             }

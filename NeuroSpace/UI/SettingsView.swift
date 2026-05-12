@@ -549,6 +549,8 @@ private struct DebugPanel: View {
 private struct ImmersivePanel: View {
     @Bindable var s: SettingsState
     @Environment(AppModel.self) private var appModel
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -600,6 +602,38 @@ private struct ImmersivePanel: View {
                     ToggleSwitch(value: $appModel.showCursor)
                 }
             }
+        }
+        .onAppear { openPreviewImmersive() }
+        .onDisappear { dismissPreviewImmersive() }
+    }
+
+    private func openPreviewImmersive() {
+        Task { @MainActor in
+            guard appModel.immersiveSpaceState == .closed else { return }
+            appModel.isPreviewingEnvironment = true
+            appModel.immersiveSpaceState = .inTransition
+            switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
+            case .opened:
+                appModel.immersiveSpaceState = .open
+            case .userCancelled, .error:
+                fallthrough
+            @unknown default:
+                appModel.immersiveSpaceState = .closed
+                appModel.isPreviewingEnvironment = false
+            }
+        }
+    }
+
+    private func dismissPreviewImmersive() {
+        Task { @MainActor in
+            guard appModel.immersiveSpaceState == .open else {
+                appModel.isPreviewingEnvironment = false
+                return
+            }
+            appModel.immersiveSpaceState = .inTransition
+            await dismissImmersiveSpace()
+            appModel.immersiveSpaceState = .closed
+            appModel.isPreviewingEnvironment = false
         }
     }
 

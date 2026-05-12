@@ -32,6 +32,9 @@ final class AppModel {
     /// BCI targeting and HoverEffectComponent highlighting still work normally.
     var showCursor: Bool = true
     var hasCompletedOnboarding: Bool = false
+    /// When true, the immersive space is open purely to preview the environment
+    /// (from Settings → Immersive). All game-side UI is suppressed.
+    var isPreviewingEnvironment: Bool = false
 
     var gameController = BubbleGameController()
     var bciClient = BCIWebSocketClient()
