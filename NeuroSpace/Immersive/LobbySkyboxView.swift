@@ -16,21 +16,27 @@ struct LobbySkyboxView: View {
             let anchor = AnchorEntity(world: .zero)
             anchor.name = "SkyboxAnchor"
             content.add(anchor)
-            await rebuild(anchor: anchor, for: appModel.selectedEnvironment)
+            await SkyboxBuilder.rebuild(anchor: anchor, for: appModel.selectedEnvironment)
         } update: { content in
             guard let anchor = content.entities.first(where: { $0.name == "SkyboxAnchor" })
             else { return }
 
             let env = appModel.selectedEnvironment
             Task { @MainActor in
-                await rebuild(anchor: anchor, for: env)
+                await SkyboxBuilder.rebuild(anchor: anchor, for: env)
             }
         }
     }
+}
 
+// MARK: - Shared skybox builder
+
+/// Builds and swaps the skybox entity tree for an `EnvironmentChoice` under a
+/// given anchor. Shared between the lobby skybox preview and the in-game
+/// immersive scene so both screens render the same environment.
+enum SkyboxBuilder {
     @MainActor
-    private func rebuild(anchor: Entity, for env: EnvironmentChoice) async {
-        // Tear down previous skybox children
+    static func rebuild(anchor: Entity, for env: EnvironmentChoice) async {
         for child in anchor.children {
             child.removeFromParent()
         }
@@ -38,9 +44,6 @@ struct LobbySkyboxView: View {
         switch env {
         case .deepSpace:
             anchor.addChild(makeStarField())
-
-        case .aurora:
-            anchor.addChild(makeAuroraSky())
 
         case .forest, .clearNight, .garden:
             if let sphere = await makeHDRSkybox(named: env.hdrAssetName ?? "") {
@@ -52,6 +55,10 @@ struct LobbySkyboxView: View {
                 anchor.addChild(makeFallbackSky(for: env))
             }
 
+        case .none:
+            // Render no skybox content — a dark, empty space.
+            break
+
         case .passthrough:
             // Render no skybox content. Note: true passthrough requires
             // .mixed immersion style, set on the ImmersiveSpace in the App.
@@ -61,7 +68,7 @@ struct LobbySkyboxView: View {
 
     // MARK: - Procedural: Deep Space starfield
 
-    private func makeStarField() -> Entity {
+    private static func makeStarField() -> Entity {
         let starField = Entity()
         starField.name = "StarField"
 
@@ -103,47 +110,9 @@ struct LobbySkyboxView: View {
         return starField
     }
 
-    // MARK: - Procedural: Aurora gradient + soft glow
-
-    private func makeAuroraSky() -> Entity {
-        let root = Entity()
-        root.name = "AuroraSky"
-
-        // Inverted sphere with a vertical gradient tint
-        let mesh = MeshResource.generateSphere(radius: 50)
-        var material = UnlitMaterial()
-        material.color = .init(tint: UIColor(red: 0.06, green: 0.04, blue: 0.18, alpha: 1.0))
-        let sky = ModelEntity(mesh: mesh, materials: [material])
-        sky.scale = SIMD3<Float>(-1, 1, 1)
-        root.addChild(sky)
-
-        // A few translucent emerald/violet ribbons rendered as oriented planes
-        let ribbonColors: [UIColor] = [
-            UIColor(red: 0.15, green: 0.85, blue: 0.55, alpha: 0.35),
-            UIColor(red: 0.45, green: 0.40, blue: 0.95, alpha: 0.30),
-            UIColor(red: 0.20, green: 0.95, blue: 0.85, alpha: 0.25)
-        ]
-
-        for (i, color) in ribbonColors.enumerated() {
-            var ribbonMaterial = UnlitMaterial()
-            ribbonMaterial.color = .init(tint: color)
-            ribbonMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.7))
-
-            let ribbon = ModelEntity(
-                mesh: .generatePlane(width: 30, height: 6),
-                materials: [ribbonMaterial]
-            )
-            ribbon.position = SIMD3<Float>(0, Float(2 + i), -8 - Float(i) * 2)
-            ribbon.transform.rotation = simd_quatf(angle: Float(i) * 0.2, axis: [0, 1, 0])
-            root.addChild(ribbon)
-        }
-
-        return root
-    }
-
     // MARK: - HDR / 360° image skybox
 
-    private func makeHDRSkybox(named name: String) async -> Entity? {
+    private static func makeHDRSkybox(named name: String) async -> Entity? {
         guard !name.isEmpty else { return nil }
 
         let texture = await loadTexture(named: name)
@@ -164,8 +133,7 @@ struct LobbySkyboxView: View {
 
     /// Tries the Reality Composer Pro package bundle first (where rkassets
     /// live), then the main app bundle as a fallback.
-    private func loadTexture(named name: String) async -> TextureResource? {
-        // 1) RealityKitContent package bundle
+    private static func loadTexture(named name: String) async -> TextureResource? {
         do {
             let texture = try await TextureResource(named: name, in: realityKitContentBundle)
             print("[Skybox] Loaded '\(name)' from realityKitContentBundle")
@@ -174,7 +142,6 @@ struct LobbySkyboxView: View {
             print("[Skybox] realityKitContentBundle miss for '\(name)': \(error.localizedDescription)")
         }
 
-        // 2) Main app bundle
         do {
             let texture = try await TextureResource(named: name)
             print("[Skybox] Loaded '\(name)' from main bundle")
@@ -188,7 +155,7 @@ struct LobbySkyboxView: View {
 
     // MARK: - Fallback: solid gradient sphere
 
-    private func makeFallbackSky(for env: EnvironmentChoice) -> Entity {
+    private static func makeFallbackSky(for env: EnvironmentChoice) -> Entity {
         let (c1, _) = env.swatchHex
         let mesh = MeshResource.generateSphere(radius: 50)
         var material = UnlitMaterial()

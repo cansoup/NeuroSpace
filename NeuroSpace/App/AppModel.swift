@@ -32,6 +32,10 @@ final class AppModel {
     /// BCI targeting and HoverEffectComponent highlighting still work normally.
     var showCursor: Bool = true
     var hasCompletedOnboarding: Bool = false
+    /// True while the lobby skybox immersive space is open as an environment
+    /// preview from Settings → Immersive. Used by ImmersivePanel to gate
+    /// open/dismiss so the preview doesn't fight with normal game flow.
+    var isPreviewingEnvironment: Bool = false
 
     var gameController = BubbleGameController()
     var bciClient = BCIWebSocketClient()
@@ -40,6 +44,8 @@ final class AppModel {
 
     init() {
         jsonPlayback = JSONPlaybackManager(controller: gameController)
+        // Wire predictions arriving over WebSocket into arm movement.
+        bciClient.armMapper = BCIArmMapper(controller: gameController)
     }
 
     var isEEGConnected: Bool {

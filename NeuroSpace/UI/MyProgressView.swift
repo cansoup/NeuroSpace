@@ -344,7 +344,7 @@ private struct WeekOverview: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 }
 
@@ -418,7 +418,7 @@ private struct SummaryStats: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 }
 
@@ -453,7 +453,7 @@ private struct SessionHistoryList: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 }
 
@@ -624,7 +624,7 @@ private struct SessionDetailPanel: View {
         .padding(.horizontal, 22)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 
     private func metricTile(label: String, value: String, unit: String?, color: Color) -> some View {
@@ -667,7 +667,7 @@ private struct SessionDetailPanel: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 
     private func stageRowView(_ row: StageBreakdownRow, idx: Int) -> some View {
@@ -740,7 +740,7 @@ private struct SessionDetailPanel: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: DS.radiusLg)
+        .tealGlassCard()
     }
 }
 

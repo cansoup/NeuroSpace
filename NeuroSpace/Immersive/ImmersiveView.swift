@@ -50,8 +50,6 @@ struct ImmersiveView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
-    @State private var startHoverBeganAt: Date? = nil
-    @State private var startTargetHighlighted = false
     @State private var clickCount: Int = 0
 
     @State private var gazeHoverBubbleID: UUID? = nil
@@ -61,10 +59,12 @@ struct ImmersiveView: View {
     @State private var calibrationStartedAt: Date? = nil
     @State private var calibrationCue: CalibrationCue = .right
     @State private var calibrationCueIndex: Int = -1
-
+    @State private var lastSkyboxEnv: EnvironmentChoice? = nil
+    @State private var popSoundResource: AudioFileResource? = nil
     private final class BubbleEntityStore {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
+        var lastSeenPopCount: Int = 0
         weak var worldAnchor: AnchorEntity?
         weak var armsAnchor: AnchorEntity?
         weak var backgroundPlane: Entity?
@@ -79,9 +79,6 @@ struct ImmersiveView: View {
 
     private let worldAnchorOffset = SIMD3<Float>(0, 1.45, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
-
-    private let startOrbPosition = SIMD3<Float>(0.0, -0.06, 0.02)
-    private let startPanelPosition = SIMD3<Float>(0.0, 0.20, 0.02)
 
     // How close (metres) the head ray must pass to a bubble to select it
     private let gazeSelectRadius: Float = 0.11
@@ -107,13 +104,6 @@ struct ImmersiveView: View {
             root.addChild(bgEntity)
             bubbleStore.backgroundPlane = bgEntity
 
-            let startOrb = makeStartOrbEntity(
-                name: "StartOrb",
-                position: startOrbPosition,
-                highlighted: false
-            )
-            root.addChild(startOrb)
-
             let gazeCursor = makeGazeCursorEntity()
             gazeCursor.name = "GazeCursor"
             gazeCursor.isEnabled = false
@@ -133,12 +123,6 @@ struct ImmersiveView: View {
                 root.addChild(panel)
             }
 
-            if let startPanel = attachments.entity(for: "startPanel") {
-                startPanel.name = "StartPanel"
-                startPanel.position = startPanelPosition
-                root.addChild(startPanel)
-            }
-
             if let calibrationPanel = attachments.entity(for: "calibrationPanel") {
                 calibrationPanel.name = "CalibrationPanel"
                 calibrationPanel.position = SIMD3<Float>(0.0, 0.18, 0.02)
@@ -149,9 +133,19 @@ struct ImmersiveView: View {
             content.add(worldAnchor)
             bubbleStore.worldAnchor = worldAnchor
 
-            let starField = makeStarField(count: 300, radius: 20.0)
-            starField.name = "StarField"
-            content.add(starField)
+            let skyboxAnchor = AnchorEntity(world: .zero)
+            skyboxAnchor.name = "SkyboxAnchor"
+            content.add(skyboxAnchor)
+            let initialEnv = appModel.selectedEnvironment
+            lastSkyboxEnv = initialEnv
+            await SkyboxBuilder.rebuild(anchor: skyboxAnchor, for: initialEnv)
+
+            do {
+                popSoundResource = try await AudioFileResource(named: "pop")
+            } catch {
+                print("[Audio] pop sound resource not found: \(error.localizedDescription)")
+            }
+            bubbleStore.lastSeenPopCount = appModel.gameController.popCount
 
             let armsAnchor = AnchorEntity(.head, trackingMode: .continuous)
             armsAnchor.name = "ArmsAnchor"
@@ -197,25 +191,44 @@ struct ImmersiveView: View {
             guard
                 let worldAnchor = content.entities.first(where: { $0.name == "WorldAnchor" }),
                 let root = worldAnchor.findEntity(named: "Root"),
-                let startOrb = root.findEntity(named: "StartOrb") as? ModelEntity,
                 let armsAnchor = content.entities.first(where: { $0.name == "ArmsAnchor" }),
                 let armsRoot = armsAnchor.findEntity(named: "ArmsRoot")
             else { return }
 
+            let currentEnv = appModel.selectedEnvironment
+            if lastSkyboxEnv != currentEnv,
+               let skyboxAnchor = content.entities.first(where: { $0.name == "SkyboxAnchor" }) {
+                lastSkyboxEnv = currentEnv
+                Task { @MainActor in
+                    await SkyboxBuilder.rebuild(anchor: skyboxAnchor, for: currentEnv)
+                }
+            }
+
             let controller = appModel.gameController
 
-            let isReadyStage = controller.sessionState == .ready
+            if controller.popCount > bubbleStore.lastSeenPopCount {
+                let prev = bubbleStore.lastSeenPopCount
+                bubbleStore.lastSeenPopCount = controller.popCount
+                print("[PopSound] popCount diff \(prev) → \(controller.popCount), state=\(controller.sessionState.rawValue)")
+                if controller.sessionState == .playing,
+                   let resource = popSoundResource,
+                   let position = controller.lastPoppedBubblePosition {
+                    playPopSound(at: position, parent: root, resource: resource)
+                }
+            } else if controller.popCount < bubbleStore.lastSeenPopCount {
+                // popCount reset (resetGame) — re-sync without playing a sound
+                print("[PopSound] popCount reset \(bubbleStore.lastSeenPopCount) → \(controller.popCount), resyncing")
+                bubbleStore.lastSeenPopCount = controller.popCount
+            }
+
             let isCalibrationStage = controller.sessionState == .calibrating
             handleArmAnimationTrigger(in: armsRoot, controller: controller)
             updateArmsRootTransform(armsRoot)
 
-            if isReadyStage || isCalibrationStage {
+            if isCalibrationStage {
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
-                if isReadyStage {
-                    hideAllHandPoses(in: armsRoot)
-                }
                 updateGazeCursorAndMarker(
                     result: nil,
                     isVisible: false
@@ -231,22 +244,6 @@ struct ImmersiveView: View {
                     with: controller.bubbles,
                     highlightedID: controller.targetedBubbleID
                 )
-            }
-
-            let showStartTarget = isReadyStage
-
-            startOrb.isEnabled = showStartTarget
-            startOrb.position = startOrbPosition
-
-            updateStartOrbAppearance(
-                startOrb,
-                highlighted: startTargetHighlighted,
-                visible: showStartTarget
-            )
-
-            if let startPanel = root.findEntity(named: "StartPanel") {
-                startPanel.isEnabled = showStartTarget
-                startPanel.position = startPanelPosition
             }
 
             if let calibrationPanel = root.findEntity(named: "CalibrationPanel") {
@@ -265,10 +262,6 @@ struct ImmersiveView: View {
                     .environment(appModel)
             }
 
-            Attachment(id: "startPanel") {
-                ImmersiveStartPanel(isHighlighted: startTargetHighlighted)
-            }
-
             Attachment(id: "calibrationPanel") {
                 ImmersiveCalibrationPanel(cue: calibrationCue)
             }
@@ -283,12 +276,6 @@ struct ImmersiveView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in
                     let name = value.entity.name
-
-                    if name == "StartOrb",
-                       appModel.gameController.sessionState == .ready {
-                        triggerSessionStart()
-                        return
-                    }
 
                     guard appModel.gameController.sessionState == .playing else { return }
 
@@ -309,11 +296,6 @@ struct ImmersiveView: View {
                 }
         )
         .onChange(of: appModel.gameController.sessionState) { _, newState in
-            if newState != .ready {
-                startHoverBeganAt = nil
-                startTargetHighlighted = false
-            }
-
             if newState != .calibrating {
                 calibrationStartedAt = nil
                 calibrationCueIndex = -1
@@ -347,7 +329,6 @@ struct ImmersiveView: View {
 
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
-                updatePreSessionStartInteraction()
                 updateCalibrationCue()
                 updateBackgroundPlane()
                 updateCursorEveryFrame()
@@ -366,8 +347,6 @@ struct ImmersiveView: View {
 
             Task { @MainActor in
                 appModel.gameController.resetGame()
-                startHoverBeganAt = nil
-                startTargetHighlighted = false
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
                 clickCount = 0
@@ -532,40 +511,6 @@ struct ImmersiveView: View {
         updateGazeCursorAndMarker(result: gazeResult, isVisible: appModel.showCursor)
     }
 
-    // MARK: - Pre-session start interaction
-
-    @MainActor
-    private func updatePreSessionStartInteraction() {
-        let controller = appModel.gameController
-
-        guard controller.sessionState == .ready else {
-            startHoverBeganAt = nil
-            startTargetHighlighted = false
-            return
-        }
-
-        let activeTip = controller.activeArm == .left
-            ? controller.leftArmState.tipPosition
-            : controller.rightArmState.tipPosition
-
-        let distance = simd_distance(activeTip, startOrbPosition)
-        let hoverRadius: Float = 0.10
-        let dwellDuration: TimeInterval = 0.45
-
-        if distance <= hoverRadius {
-            startTargetHighlighted = true
-            if startHoverBeganAt == nil {
-                startHoverBeganAt = Date()
-            } else if let began = startHoverBeganAt,
-                      Date().timeIntervalSince(began) >= dwellDuration {
-                triggerSessionStart()
-            }
-        } else {
-            startHoverBeganAt = nil
-            startTargetHighlighted = false
-        }
-    }
-
     @MainActor
     private func updateCalibrationCue() {
         let controller = appModel.gameController
@@ -622,14 +567,6 @@ struct ImmersiveView: View {
         }
     }
 
-    @MainActor
-    private func triggerSessionStart() {
-        guard appModel.gameController.sessionState == .ready else { return }
-        startHoverBeganAt = nil
-        startTargetHighlighted = false
-        appModel.gameController.startSession()
-    }
-
     // MARK: - Hand animation helpers
 
     private func handPoseName(for arm: ActiveArm) -> String {
@@ -662,7 +599,7 @@ struct ImmersiveView: View {
         let yaw: Float = arm == .left ? -.pi / 14 : .pi / 14
 
         return ArmVisualTransform(
-            position: SIMD3<Float>(xOffset, -0.30, -0.30),
+            position: SIMD3<Float>(xOffset, -0.34, -0.30),
             scale: baseScale,
             orientation: baseOrientation * simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
         )
@@ -914,57 +851,26 @@ struct ImmersiveView: View {
         bubbleStore.entities.removeAll()
     }
 
-    private func makeStartOrbEntity(name: String, position: SIMD3<Float>, highlighted: Bool) -> ModelEntity {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
-        m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
-        let entity = ModelEntity(mesh: .generateSphere(radius: highlighted ? 0.055 : 0.045), materials: [m])
-        entity.name = name
-        entity.position = position
-        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.06)]))
-        entity.components.set(InputTargetComponent())
-        return entity
-    }
+    /// Spawn a transient spatial-audio entity at the popped-bubble position,
+    /// play the pop sound, and clean up shortly after.
+    @MainActor
+    private func playPopSound(at position: SIMD3<Float>, parent: Entity, resource: AudioFileResource) {
+        let id = UUID().uuidString.prefix(8)
+        let t = CACurrentMediaTime()
+        let activeBefore = parent.children.filter { $0.name == "PopSound" }.count
+        print("[PopSound] play id=\(id) pos=(\(position.x),\(position.y),\(position.z)) t=\(String(format: "%.3f", t)) activeBefore=\(activeBefore)")
 
-    private func makeStarField(count: Int, radius: Float) -> Entity {
-        let root = Entity()
-        for _ in 0..<count {
-            let theta = Float.random(in: 0...(2 * .pi))
-            let phi = acos(Float.random(in: -1...1))
-            let r = radius * Float.random(in: 0.85...1.0)
-            let size = Float.random(in: 0.01...0.04)
-            let brightness = Float.random(in: 0.5...1.0)
+        let audioEntity = Entity()
+        audioEntity.name = "PopSound"
+        audioEntity.position = position
+        audioEntity.spatialAudio = SpatialAudioComponent()
+        parent.addChild(audioEntity)
+        audioEntity.playAudio(resource)
 
-            var m = UnlitMaterial()
-            let roll = Int.random(in: 0...100)
-            if roll < 5 {
-                m.color = .init(tint: UIColor(red: 0.7, green: 0.85, blue: 1.0, alpha: CGFloat(brightness)))
-            } else if roll < 8 {
-                m.color = .init(tint: UIColor(red: 1.0, green: 0.9, blue: 0.7, alpha: CGFloat(brightness)))
-            } else {
-                m.color = .init(tint: UIColor(white: CGFloat(brightness), alpha: 1.0))
-            }
-
-            let star = ModelEntity(mesh: .generateSphere(radius: size), materials: [m])
-            star.position = SIMD3<Float>(
-                r * sin(phi) * cos(theta),
-                r * sin(phi) * sin(theta),
-                r * cos(phi)
-            )
-            root.addChild(star)
-        }
-        return root
-    }
-
-    private func updateStartOrbAppearance(_ entity: ModelEntity, highlighted: Bool, visible: Bool) {
-        entity.scale = visible
-            ? SIMD3<Float>(repeating: highlighted ? 1.18 : 1.0)
-            : SIMD3<Float>(repeating: 0.001)
-
-        if var m = entity.model?.materials.first as? PhysicallyBasedMaterial {
-            m.baseColor = .init(tint: (highlighted ? UIColor.systemGreen : UIColor.systemPurple).withAlphaComponent(0.95))
-            m.emissiveColor = .init(color: highlighted ? .white : .systemPink)
-            entity.model?.materials = [m]
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            audioEntity.removeFromParent()
+            print("[PopSound] cleanup id=\(id) t=\(String(format: "%.3f", CACurrentMediaTime()))")
         }
     }
 }
@@ -1019,28 +925,3 @@ private struct ImmersiveCalibrationPanel: View {
     }
 }
 
-// MARK: - Immersive Start Panel
-
-struct ImmersiveStartPanel: View {
-    let isHighlighted: Bool
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text("Ready to Begin?")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-
-            Text("Move the active arm onto the glowing orb to start.")
-                .font(.system(size: 13, weight: .medium))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-
-            Text(isHighlighted ? "Hold steady..." : "Awaiting arm input")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(isHighlighted ? .green : .purple)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .frame(width: 260)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-    }
-}
