@@ -37,6 +37,13 @@ final class AppModel {
     /// open/dismiss so the preview doesn't fight with normal game flow.
     var isPreviewingEnvironment: Bool = false
 
+    /// True while the in-world stage-end bubble menu is visible inside the immersive space.
+    var showStageEndBubbles: Bool = false
+
+    /// Drives which result card is shown as a head-tracked attachment.
+    enum StageEndResult { case none, passed, failed }
+    var stageEndResult: StageEndResult = .none
+
     var gameController = BubbleGameController()
     var bciClient = BCIWebSocketClient()
     var jsonPlayback: JSONPlaybackManager!

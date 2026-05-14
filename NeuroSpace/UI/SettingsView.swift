@@ -110,10 +110,11 @@ struct SettingsView: View {
                 .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .hoverEffect(.highlight)
         }
     }
 
-    // MARK: Sidebar
+    
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -226,6 +227,7 @@ private struct NavRow: View {
             )
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .onHover { hover = $0 }
     }
 }
@@ -315,6 +317,7 @@ private struct ChipGroupView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(.highlight)
             }
         }
     }

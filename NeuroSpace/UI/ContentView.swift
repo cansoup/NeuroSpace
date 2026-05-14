@@ -252,6 +252,7 @@ struct LobbyView: View {
             )
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
     }
 
     // MARK: - Right Column: Stats

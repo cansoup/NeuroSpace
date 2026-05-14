@@ -9,17 +9,11 @@ import SwiftUI
 
 struct CongratsView: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
-
-    @State private var didAutoAdvance = false
 
     private var controller: BubbleGameController { appModel.gameController }
 
-    private var canProceed: Bool {
-        controller.isOnFinalStage || controller.meetsUnlockCriteria
+    private var passed: Bool {
+        controller.meetsUnlockCriteria
     }
 
     private var poppedByType: [(BubbleType, Int)] {
@@ -35,26 +29,23 @@ struct CongratsView: View {
             header
                 .padding(.bottom, 22)
 
-            if canProceed {
+            if passed {
                 breakdownCard
                     .padding(.bottom, 14)
-
-                stageScoreRow
-                    .padding(.bottom, 18)
             } else {
                 criteriaCard
-                    .padding(.bottom, 18)
-
-                stageScoreRow
-                    .padding(.bottom, 18)
+                    .padding(.bottom, 14)
             }
 
-            buttons
+            stageScoreRow
+                .padding(.bottom, 20)
+
+            bubblePrompt
         }
         .padding(.horizontal, 28)
         .padding(.top, 30)
         .padding(.bottom, 26)
-        .frame(width: 400)
+        .frame(width: 360)
         .background(
             Color(hex: 0x080E1C, alpha: 0.75),
             in: RoundedRectangle(cornerRadius: DS.radiusXl)
@@ -62,23 +53,13 @@ struct CongratsView: View {
         .overlay(
             RoundedRectangle(cornerRadius: DS.radiusXl)
                 .strokeBorder(
-                    canProceed ? DS.teal.opacity(0.25) : DS.warning.opacity(0.30),
+                    passed ? DS.teal.opacity(0.25) : DS.warning.opacity(0.30),
                     lineWidth: 1
                 )
         )
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
-            dismissWindow(id: appModel.congratsWindowID)
-        }
-        .onChange(of: controller.armAnimationTriggerCount) { _, _ in
-            // Auto-press the primary "Next Stage" button when BCI predicts
-            // "both" while the stage-cleared window is open and the player
-            // is eligible to advance.
-            guard !didAutoAdvance,
-                  canProceed,
-                  controller.armAnimationPrediction == PredictedClass.both else { return }
-            didAutoAdvance = true
-            primaryAction()
+            appModel.stageEndResult = .none
         }
     }
 
@@ -86,7 +67,7 @@ struct CongratsView: View {
 
     private var header: some View {
         VStack(spacing: 12) {
-            if canProceed {
+            if passed {
                 NeuroLogoMark(size: 56)
             } else {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -95,18 +76,18 @@ struct CongratsView: View {
             }
 
             VStack(spacing: 6) {
-                Text(canProceed
+                Text(passed
                      ? "STAGE \(controller.currentStage) COMPLETE"
                      : "STAGE \(controller.currentStage) INCOMPLETE")
                     .font(DS.fontLabel)
                     .tracking(DS.labelTracking)
                     .foregroundStyle(DS.textTertiary)
 
-                Text(canProceed ? "Stage Cleared!" : "Stage Not Cleared")
+                Text(passed ? "Stage Cleared!" : "Stage Not Cleared")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: canProceed ? [.white, DS.teal] : [.white, DS.warning],
+                            colors: passed ? [.white, DS.teal] : [.white, DS.warning],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -177,7 +158,7 @@ struct CongratsView: View {
         }
     }
 
-    // MARK: Criteria pill (failure case)
+    // MARK: Criteria card (incomplete stage)
 
     private var criteriaCard: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -229,152 +210,25 @@ struct CongratsView: View {
         )
     }
 
-    // MARK: Buttons
+    // MARK: Bubble prompt
 
-    @ViewBuilder
-    private var buttons: some View {
-        if canProceed {
-            // Single full-width primary button
-            primaryButton(
-                label: controller.isOnFinalStage ? "Session Complete ✦" : "Next Stage →",
-                gradient: controller.isOnFinalStage
-                    ? [Color(hex: 0x9B7FEA).opacity(0.85), Color(hex: 0x785AC8).opacity(0.85)]
-                    : [DS.teal.opacity(0.85), Color(hex: 0x00A078).opacity(0.85)],
-                textColor: controller.isOnFinalStage ? .white : Color(hex: 0x001a12),
-                glow: controller.isOnFinalStage ? DS.purple : DS.teal,
-                action: primaryAction
-            )
-        } else {
-            // Try Again (primary) + Go to Main (secondary)
-            VStack(spacing: 10) {
-                primaryButton(
-                    label: "Try Again",
-                    gradient: [DS.teal.opacity(0.85), Color(hex: 0x00A078).opacity(0.85)],
-                    textColor: Color(hex: 0x001a12),
-                    glow: DS.teal,
-                    action: retryStage
-                )
-
-                Button(action: primaryAction) {
-                    Text("Go to Main")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .tracking(0.5)
-                        .foregroundStyle(DS.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
+    private var bubblePrompt: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "eye")
+                .font(.system(size: 12))
+                .foregroundStyle(DS.teal)
+            Text("Look at a bubble to make your choice")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(DS.textSecondary)
         }
-    }
-
-    private func primaryButton(
-        label: String,
-        gradient: [Color],
-        textColor: Color,
-        glow: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .tracking(0.5)
-                .foregroundStyle(textColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    LinearGradient(
-                        colors: gradient,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 14)
-                )
-                .shadow(color: glow.opacity(0.25), radius: 12)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func primaryAction() {
-        Task { @MainActor in
-            if !controller.isOnFinalStage && canProceed && controller.canAdvanceStage {
-                controller.advanceStage()
-                print("[Congrats] advanced to stage \(controller.currentStage)")
-
-                if appModel.immersiveSpaceState == .open {
-                    controller.startSession()
-                    dismissWindow(id: appModel.congratsWindowID)
-                    dismissWindow(id: appModel.missionFailedWindowID)
-                    // Closing the last visible window can let visionOS
-                    // auto-recreate the default WindowGroup (the lobby).
-                    // Re-dismiss main to keep the user in immersive.
-                    dismissWindow(id: appModel.mainWindowID)
-                } else {
-                    appModel.immersiveSpaceState = .inTransition
-                    switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
-                    case .opened:
-                        appModel.immersiveSpaceState = .open
-                        controller.startSession()
-                        dismissWindow(id: appModel.congratsWindowID)
-                        dismissWindow(id: appModel.missionFailedWindowID)
-                        dismissWindow(id: appModel.mainWindowID)
-
-                    case .userCancelled, .error:
-                        fallthrough
-
-                    @unknown default:
-                        appModel.immersiveSpaceState = .closed
-                    }
-                }
-            } else {
-                dismissWindow(id: appModel.congratsWindowID)
-                dismissWindow(id: appModel.missionFailedWindowID)
-
-                appModel.saveSessionRecord()
-                controller.resetGame()
-
-                if appModel.immersiveSpaceState == .open {
-                    appModel.immersiveSpaceState = .inTransition
-                    await dismissImmersiveSpace()
-                    appModel.immersiveSpaceState = .closed
-                }
-
-                openWindow(id: appModel.mainWindowID)
-            }
-        }
-    }
-
-    private func retryStage() {
-        Task { @MainActor in
-            dismissWindow(id: appModel.congratsWindowID)
-            dismissWindow(id: appModel.missionFailedWindowID)
-
-            controller.resetGame(keepStage: true)
-
-            if appModel.immersiveSpaceState == .open {
-                controller.startSession()
-                dismissWindow(id: appModel.mainWindowID)
-            } else {
-                appModel.immersiveSpaceState = .inTransition
-                switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
-                case .opened:
-                    appModel.immersiveSpaceState = .open
-                    controller.startSession()
-                    dismissWindow(id: appModel.mainWindowID)
-
-                case .userCancelled, .error:
-                    fallthrough
-
-                @unknown default:
-                    appModel.immersiveSpaceState = .closed
-                }
-            }
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(DS.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(DS.teal.opacity(0.20), lineWidth: 1)
+        )
     }
 }
 
@@ -382,10 +236,6 @@ struct CongratsView: View {
 
 struct MissionFailedView: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
 
     private var controller: BubbleGameController { appModel.gameController }
 
@@ -406,14 +256,14 @@ struct MissionFailedView: View {
                 .padding(.bottom, 14)
 
             stageScoreRow
-                .padding(.bottom, 18)
+                .padding(.bottom, 20)
 
-            buttons
+            bubblePrompt
         }
         .padding(.horizontal, 28)
         .padding(.top, 30)
         .padding(.bottom, 26)
-        .frame(width: 400)
+        .frame(width: 360)
         .background(
             Color(hex: 0x080E1C, alpha: 0.75),
             in: RoundedRectangle(cornerRadius: DS.radiusXl)
@@ -424,11 +274,11 @@ struct MissionFailedView: View {
         )
         .onChange(of: appModel.shouldEndSession) { _, shouldEnd in
             guard shouldEnd else { return }
-            dismissWindow(id: appModel.missionFailedWindowID)
+            appModel.stageEndResult = .none
         }
         .onChange(of: appModel.gameController.sessionState) { _, newState in
             if newState != .finished {
-                dismissWindow(id: appModel.missionFailedWindowID)
+                appModel.stageEndResult = .none
             }
         }
     }
@@ -557,90 +407,25 @@ struct MissionFailedView: View {
         )
     }
 
-    // MARK: Buttons
+    // MARK: Bubble prompt
 
-    private var buttons: some View {
-        VStack(spacing: 10) {
-            Button(action: tryAgain) {
-                Text("Try Again →")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .tracking(0.5)
-                    .foregroundStyle(Color(hex: 0x001a12))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.teal.opacity(0.85), Color(hex: 0x00A078).opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 14)
-                    )
-                    .shadow(color: DS.teal.opacity(0.25), radius: 12)
-            }
-            .buttonStyle(.plain)
-
-            Button(action: goToMain) {
-                Text("Go to Main")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .tracking(0.5)
-                    .foregroundStyle(DS.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
+    private var bubblePrompt: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "eye")
+                .font(.system(size: 12))
+                .foregroundStyle(DS.warning)
+            Text("Look at a bubble to make your choice")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(DS.textSecondary)
         }
-    }
-
-    private func tryAgain() {
-        Task { @MainActor in
-            dismissWindow(id: appModel.missionFailedWindowID)
-            dismissWindow(id: appModel.congratsWindowID)
-
-            controller.resetGame(keepStage: true)
-
-            if appModel.immersiveSpaceState != .open {
-                appModel.immersiveSpaceState = .inTransition
-                switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
-                case .opened:
-                    appModel.immersiveSpaceState = .open
-                    controller.startSession()
-                    dismissWindow(id: appModel.mainWindowID)
-
-                case .userCancelled, .error:
-                    fallthrough
-
-                @unknown default:
-                    appModel.immersiveSpaceState = .closed
-                }
-            } else {
-                controller.startSession()
-                dismissWindow(id: appModel.mainWindowID)
-            }
-        }
-    }
-
-    private func goToMain() {
-        Task { @MainActor in
-            dismissWindow(id: appModel.missionFailedWindowID)
-            dismissWindow(id: appModel.congratsWindowID)
-
-            appModel.saveSessionRecord()
-            controller.resetGame()
-
-            if appModel.immersiveSpaceState == .open {
-                appModel.immersiveSpaceState = .inTransition
-                await dismissImmersiveSpace()
-                appModel.immersiveSpaceState = .closed
-            }
-
-            openWindow(id: appModel.mainWindowID)
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(DS.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(DS.warning.opacity(0.20), lineWidth: 1)
+        )
     }
 }
 

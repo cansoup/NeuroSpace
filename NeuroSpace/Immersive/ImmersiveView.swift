@@ -61,6 +61,13 @@ struct ImmersiveView: View {
     @State private var calibrationCueIndex: Int = -1
     @State private var lastSkyboxEnv: EnvironmentChoice? = nil
     @State private var popSoundResource: AudioFileResource? = nil
+
+    // Stage-end dwell tracking — mirrors gazeHoverBubbleID / gazeHoverBeganAt
+    @State private var stageEndDwellTarget: StageEndChoice? = nil
+    @State private var stageEndDwellBeganAt: Date? = nil
+    @State private var stageEndDwellFired: Bool = false
+    @State private var stageEndDwellProgress: Double = 0.0
+
     private final class BubbleEntityStore {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
@@ -70,6 +77,9 @@ struct ImmersiveView: View {
         weak var backgroundPlane: Entity?
         weak var gazeCursor: ModelEntity?
         weak var holdMarker: ModelEntity?
+        // Stage-end option spheres
+        weak var stageEndRoot: Entity?
+        var stageEndSpheres: [String: ModelEntity] = [:]
         let arSession = ARKitSession()
         let worldTracking = WorldTrackingProvider()
         var arSessionStarted = false
@@ -83,6 +93,8 @@ struct ImmersiveView: View {
     // How close (metres) the head ray must pass to a bubble to select it
     private let gazeSelectRadius: Float = 0.11
     private let gazeDwellDuration: TimeInterval = 0.65
+    /// Longer dwell for stage-end option bubbles — gives the user time to decide.
+    private let stageEndDwellDuration: TimeInterval = 5.0
 
     var body: some View {
         RealityView { content, attachments in
@@ -184,6 +196,50 @@ struct ImmersiveView: View {
                 armsAnchor.addChild(progressBar)
             }
 
+            // Result card: world-anchored, sits just above the option bubbles
+            // seRoot is at (-0.03, -0.05, 0.0), spheres radius 0.09 → top ~y=0.04
+            // Place card at y=0.20 so it clears the bubbles with a small gap
+            if let result = attachments.entity(for: "resultPanel") {
+                result.name = "ResultPanel"
+                result.position = SIMD3<Float>(-0.03, 0.22, 0.0)
+                root.addChild(result)
+            }
+
+            // ── Stage-end option spheres ─────────────────────────────────────────
+            // Three real RealityKit spheres (same material as game bubbles) that
+            // float in the space after a stage ends.  Labels are SwiftUI attachments.
+            let seRoot = Entity()
+            seRoot.name = "StageEndRoot"
+            seRoot.isEnabled = false
+
+            // Sphere configs: (name, colour, x-offset)
+            // Shifted left so "next" doesn't overlap the HUD panel (x=0.34)
+            let seConfigs: [(String, UIColor, Float)] = [
+                (StageEndChoice.lobby.rawValue, UIColor(DS.textSecondary).withAlphaComponent(0.9), -0.38),
+                (StageEndChoice.retry.rawValue, UIColor(DS.warning),                               -0.06),
+                (StageEndChoice.next.rawValue,  UIColor(DS.teal),                                   0.26)
+            ]
+
+            for (name, color, xOffset) in seConfigs {
+                let sphere = makeStageEndSphere(color: color)
+                sphere.name = name
+                sphere.position = SIMD3<Float>(xOffset, 0.0, 0.0)
+                seRoot.addChild(sphere)
+                bubbleStore.stageEndSpheres[name] = sphere
+
+                // Label attachment sits 0.14 m below the sphere centre
+                if let label = attachments.entity(for: name) {
+                    label.name = "Label_\(name)"
+                    label.position = SIMD3<Float>(0.0, -0.18, 0.0)
+                    sphere.addChild(label)
+                }
+            }
+
+            // Below eye level so bubbles sit under the HUD panel
+            seRoot.position = SIMD3<Float>(-0.03, -0.05, 0.0)
+            root.addChild(seRoot)
+            bubbleStore.stageEndRoot = seRoot
+
             armsAnchor.addChild(armsRoot)
             content.add(armsAnchor)
 
@@ -225,7 +281,9 @@ struct ImmersiveView: View {
             handleArmAnimationTrigger(in: armsRoot, controller: controller)
             updateArmsRootTransform(armsRoot)
 
-            if isCalibrationStage {
+            if isCalibrationStage || controller.sessionState == .finished {
+                // Calibrating: not started yet. Finished: stage over.
+                // Either way, clear all game bubbles from the scene.
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
@@ -256,6 +314,33 @@ struct ImmersiveView: View {
                 panel.scale = SIMD3<Float>(repeating: 0.92)
             }
 
+            // Show/hide stage-end spheres and sync which options are available
+            if let seRoot = root.findEntity(named: "StageEndRoot") {
+                let show = appModel.showStageEndBubbles
+                seRoot.isEnabled = show
+
+                if show {
+                    let passed = controller.finishReason == .allPopped && controller.meetsUnlockCriteria
+                    // Hide "Next" sphere when stage was failed
+                    if let nextSphere = seRoot.findEntity(named: StageEndChoice.next.rawValue) {
+                        nextSphere.isEnabled = passed
+                    }
+                    // Brighten whichever sphere is currently being dwelled on
+                    for choice in [StageEndChoice.lobby, .retry, .next] {
+                        if let sphere = seRoot.findEntity(named: choice.rawValue) as? ModelEntity {
+                            let isTarget = stageEndDwellTarget == choice
+                            let color: UIColor
+                            switch choice {
+                            case .lobby: color = UIColor(DS.textSecondary).withAlphaComponent(0.9)
+                            case .retry: color = UIColor(DS.warning)
+                            case .next:  color = UIColor(DS.teal)
+                            }
+                            sphere.model?.materials = [makeStageEndMaterial(color: color, highlighted: isTarget)]
+                        }
+                    }
+                }
+            }
+
         } attachments: {
             Attachment(id: "controlPanel") {
                 GameControlPanel()
@@ -270,6 +355,52 @@ struct ImmersiveView: View {
                 BubbleProgressBar()
                     .environment(appModel)
             }
+
+            // Result card — head-tracked attachment above the bubbles
+            Attachment(id: "resultPanel") {
+                switch appModel.stageEndResult {
+                case .passed:
+                    CongratsView()
+                        .environment(appModel)
+                case .failed:
+                    MissionFailedView()
+                        .environment(appModel)
+                case .none:
+                    EmptyView()
+                }
+            }
+
+            // Stage-end pill labels — one per sphere, with live dwell countdown
+            Attachment(id: StageEndChoice.lobby.rawValue) {
+                StageEndLabel(
+                    text: "Lobby",
+                    color: DS.textSecondary,
+                    isActive: stageEndDwellTarget == .lobby,
+                    dwellProgress: stageEndDwellTarget == .lobby ? stageEndDwellProgress : 0,
+                    dwellDuration: stageEndDwellDuration
+                )
+            }
+            Attachment(id: StageEndChoice.retry.rawValue) {
+                StageEndLabel(
+                    text: "Retry",
+                    color: DS.warning,
+                    isActive: stageEndDwellTarget == .retry,
+                    dwellProgress: stageEndDwellTarget == .retry ? stageEndDwellProgress : 0,
+                    dwellDuration: stageEndDwellDuration
+                )
+            }
+            Attachment(id: StageEndChoice.next.rawValue) {
+                let isFinal = appModel.gameController.isOnFinalStage
+                StageEndLabel(
+                    text: isFinal ? "Finish" : "Next Stage",
+                    color: DS.teal,
+                    isActive: stageEndDwellTarget == .next,
+                    dwellProgress: stageEndDwellTarget == .next ? stageEndDwellProgress : 0,
+                    dwellDuration: stageEndDwellDuration
+                )
+            }
+
+
         }
         .gesture(
             SpatialTapGesture()
@@ -281,6 +412,14 @@ struct ImmersiveView: View {
 
                     if name == "BackgroundPlane" {
                         clickCount += 1
+                        return
+                    }
+
+                    // Stage-end option tapped (fallback for direct pinch/tap)
+                    if name.hasPrefix("StageEnd_"),
+                       appModel.showStageEndBubbles,
+                       let choice = StageEndChoice(rawValue: name) {
+                        handleStageEndChoice(choice)
                         return
                     }
 
@@ -307,12 +446,28 @@ struct ImmersiveView: View {
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
 
-                switch appModel.gameController.finishReason {
-                case .allPopped:
-                    openWindow(id: appModel.congratsWindowID)
+                // Show the in-world bubble menu — it replaces the flat windows
+                // when the player is inside the immersive space.
+                if appModel.immersiveSpaceState == .open {
+                    stageEndDwellTarget = nil
+                    stageEndDwellBeganAt = nil
+                    stageEndDwellFired = false
+                    stageEndDwellProgress = 0.0
+                    appModel.showStageEndBubbles = true
 
-                default:
-                    openWindow(id: appModel.missionFailedWindowID)
+                    // Show result as a head-tracked attachment — no floating window
+                    switch appModel.gameController.finishReason {
+                    case .allPopped: appModel.stageEndResult = .passed
+                    default:         appModel.stageEndResult = .failed
+                    }
+                } else {
+                    // Fallback: open the flat window if not in immersive
+                    switch appModel.gameController.finishReason {
+                    case .allPopped:
+                        openWindow(id: appModel.congratsWindowID)
+                    default:
+                        openWindow(id: appModel.missionFailedWindowID)
+                    }
                 }
             }
         }
@@ -346,6 +501,12 @@ struct ImmersiveView: View {
             appModel.shouldEndSession = false
 
             Task { @MainActor in
+                appModel.showStageEndBubbles = false
+                appModel.stageEndResult = .none
+                stageEndDwellTarget = nil
+                stageEndDwellBeganAt = nil
+                stageEndDwellFired = false
+                stageEndDwellProgress = 0.0
                 appModel.gameController.resetGame()
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
@@ -494,6 +655,16 @@ struct ImmersiveView: View {
     @MainActor
     private func updateCursorEveryFrame() {
         let controller = appModel.gameController
+
+        // ── Stage-end dwell mode ──────────────────────────────────────────────
+        if appModel.showStageEndBubbles && !stageEndDwellFired {
+            updateStageEndDwell()
+            // Hide gameplay cursor while stage-end is showing
+            bubbleStore.gazeCursor?.isEnabled = false
+            bubbleStore.holdMarker?.isEnabled = false
+            return
+        }
+
         guard controller.sessionState == .playing else {
             // Hide cursor outside of gameplay
             bubbleStore.gazeCursor?.isEnabled = false
@@ -509,6 +680,63 @@ struct ImmersiveView: View {
 
         // Cursor and hold marker only render when showCursor is enabled
         updateGazeCursorAndMarker(result: gazeResult, isVisible: appModel.showCursor)
+    }
+
+    // MARK: - Stage-end dwell
+
+    @MainActor
+    private func updateStageEndDwell() {
+        guard let ray = currentHeadRayInRootSpace() else { return }
+
+        // Find which stage-end sphere (if any) the head ray is pointing at
+        let passed = appModel.gameController.finishReason == .allPopped
+                  && appModel.gameController.meetsUnlockCriteria
+        var closestChoice: StageEndChoice? = nil
+        var closestPerp: Float = .greatestFiniteMagnitude
+
+        let candidates: [StageEndChoice] = passed
+            ? [.lobby, .retry, .next]
+            : [.lobby, .retry]
+
+        for choice in candidates {
+            guard let sphere = bubbleStore.stageEndSpheres[choice.rawValue],
+                  sphere.isEnabled else { continue }
+
+            // Get sphere position in root-local space (same space as the head ray)
+            let rootPos = sphere.position(relativeTo: bubbleStore.worldAnchor)
+            let toBubble = rootPos - ray.origin
+            let depth = simd_dot(toBubble, ray.direction)
+            guard depth > 0 else { continue }
+            let closest = ray.origin + ray.direction * depth
+            let perp = simd_distance(rootPos, closest)
+            if perp < closestPerp {
+                closestPerp = perp
+                closestChoice = choice
+            }
+        }
+
+        let stageEndSelectRadius: Float = 0.22   // generous radius so head-turning is comfortable
+
+        if closestPerp <= stageEndSelectRadius, let choice = closestChoice {
+            if stageEndDwellTarget != choice {
+                // Switched to a new sphere — reset timer
+                stageEndDwellTarget = choice
+                stageEndDwellBeganAt = Date()
+                stageEndDwellProgress = 0.0
+            } else if let began = stageEndDwellBeganAt {
+                let elapsed = Date().timeIntervalSince(began)
+                stageEndDwellProgress = min(elapsed / stageEndDwellDuration, 1.0)
+                if elapsed >= stageEndDwellDuration {
+                    stageEndDwellFired = true
+                    handleStageEndChoice(choice)
+                }
+            }
+        } else {
+            // Not looking at any sphere — reset
+            stageEndDwellTarget = nil
+            stageEndDwellBeganAt = nil
+            stageEndDwellProgress = 0.0
+        }
     }
 
     @MainActor
@@ -875,6 +1103,90 @@ struct ImmersiveView: View {
     }
 }
 
+// MARK: - Stage-end sphere helpers
+
+extension ImmersiveView {
+
+    /// Creates a RealityKit sphere entity styled like a game bubble.
+    func makeStageEndSphere(color: UIColor) -> ModelEntity {
+        let radius: Float = 0.09
+        let entity = ModelEntity(
+            mesh: .generateSphere(radius: radius),
+            materials: [makeStageEndMaterial(color: color, highlighted: false)]
+        )
+        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
+        entity.components.set(InputTargetComponent())
+        entity.components.set(HoverEffectComponent(
+            .highlight(HoverEffectComponent.HighlightHoverEffectStyle(
+                color: .init(color),
+                strength: 2.0
+            ))
+        ))
+        return entity
+    }
+
+    /// Physically-based material identical to game bubbles.
+    func makeStageEndMaterial(color: UIColor, highlighted: Bool) -> PhysicallyBasedMaterial {
+        var m = PhysicallyBasedMaterial()
+        m.baseColor       = .init(tint: color.withAlphaComponent(highlighted ? 0.55 : 0.30))
+        m.roughness       = .init(floatLiteral: 0.05)
+        m.metallic        = .init(floatLiteral: 0.0)
+        m.blending        = .transparent(opacity: .init(floatLiteral: 0.45))
+        m.clearcoat       = .init(floatLiteral: 1.0)
+        m.clearcoatRoughness = .init(floatLiteral: 0.0)
+        m.emissiveColor   = .init(color: color)
+        m.emissiveIntensity = highlighted ? 5.0 : 1.8
+        return m
+    }
+
+    /// Routes a confirmed stage-end choice (from dwell or direct tap) to the
+    /// appropriate navigation action, mirroring CongratsView / MissionFailedView.
+    @MainActor
+    func handleStageEndChoice(_ choice: StageEndChoice) {
+        // Reset dwell state immediately so the handler only fires once
+        stageEndDwellTarget = nil
+        stageEndDwellBeganAt = nil
+
+        Task { @MainActor in
+            appModel.showStageEndBubbles = false
+            appModel.stageEndResult = .none
+            stageEndDwellFired = false
+            dismissWindow(id: appModel.congratsWindowID)
+            dismissWindow(id: appModel.missionFailedWindowID)
+
+            let controller = appModel.gameController
+
+            switch choice {
+
+            case .lobby:
+                appModel.saveSessionRecord()
+                controller.resetGame()
+                if appModel.immersiveSpaceState == .open {
+                    appModel.immersiveSpaceState = .inTransition
+                    await dismissImmersiveSpace()
+                    appModel.immersiveSpaceState = .closed
+                }
+                openWindow(id: appModel.mainWindowID)
+
+            case .retry:
+                controller.resetGame(keepStage: true)
+                if appModel.immersiveSpaceState == .open {
+                    controller.startSession()
+                    dismissWindow(id: appModel.mainWindowID)
+                }
+
+            case .next:
+                guard controller.canAdvanceStage else { return }
+                controller.advanceStage()
+                if appModel.immersiveSpaceState == .open {
+                    controller.startSession()
+                    dismissWindow(id: appModel.mainWindowID)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Immersive Calibration Panel
 
 private struct ImmersiveCalibrationPanel: View {
@@ -924,4 +1236,3 @@ private struct ImmersiveCalibrationPanel: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
     }
 }
-
