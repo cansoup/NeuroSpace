@@ -87,7 +87,12 @@ struct ImmersiveView: View {
         var smoothedCursorPosition: SIMD3<Float>? = nil
     }
 
-    private let worldAnchorOffset = SIMD3<Float>(0, 1.45, -1.0)
+    /// Root content offset relative to the head anchor at session start.
+    /// Y = -0.11 m compensates for the bubble Y-range bias (-0.08 ... 0.30,
+    /// midpoint ≈ +0.11) so spawned bubbles average at the user's actual
+    /// eye level instead of above it. Z = -1.0 m places the play space one
+    /// metre in front of the user.
+    private let worldAnchorOffset = SIMD3<Float>(0, -0.11, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
 
     // How close (metres) the head ray must pass to a bubble to select it
@@ -98,12 +103,16 @@ struct ImmersiveView: View {
 
     var body: some View {
         RealityView { content, attachments in
-            let worldAnchor = AnchorEntity(world: worldAnchorOffset)
+            // Anchor the play space to the user's head position at session
+            // start (.once), so the world adapts to actual eye height instead
+            // of a hardcoded 1.45 m. After the initial lock the anchor stays
+            // put — content does not follow head movement.
+            let worldAnchor = AnchorEntity(.head, trackingMode: .once)
             worldAnchor.name = "WorldAnchor"
 
             let root = Entity()
             root.name = "Root"
-            root.position = .zero
+            root.position = worldAnchorOffset
 
             let bgEntity = Entity()
             bgEntity.name = "BackgroundPlane"
