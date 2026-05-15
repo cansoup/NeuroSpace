@@ -37,6 +37,12 @@ final class AppModel {
     /// open/dismiss so the preview doesn't fight with normal game flow.
     var isPreviewingEnvironment: Bool = false
 
+    /// Accessibility: when true, SwiftUI buttons that opt-in via `.dwellable`
+    /// auto-fire after the user's gaze hovers on them for `dwellDuration`
+    /// seconds. Designed for users who cannot use hand gestures.
+    var dwellModeEnabled: Bool = false
+    var dwellDuration: Double = 1.5
+
     /// True while the in-world stage-end bubble menu is visible inside the immersive space.
     var showStageEndBubbles: Bool = false
 

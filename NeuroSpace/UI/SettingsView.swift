@@ -44,6 +44,7 @@ private final class SettingsState {
 struct SettingsView: View {
     let onBack: () -> Void
 
+    @Environment(AppModel.self) private var appModel
     @State private var selectedTab: SettingsTab = .debug
     @State private var settings = SettingsState()
 
@@ -111,6 +112,12 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .hoverEffect(.highlight)
+            .dwellable(
+                appModel.dwellModeEnabled,
+                duration: appModel.dwellDuration,
+                cornerRadius: 999,
+                action: onBack
+            )
         }
     }
 
@@ -182,6 +189,7 @@ private struct NavRow: View {
     let isActive: Bool
     let onTap: () -> Void
 
+    @Environment(AppModel.self) private var appModel
     @State private var hover = false
 
     var body: some View {
@@ -229,6 +237,12 @@ private struct NavRow: View {
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
         .onHover { hover = $0 }
+        .dwellable(
+            appModel.dwellModeEnabled,
+            duration: appModel.dwellDuration,
+            cornerRadius: 12,
+            action: onTap
+        )
     }
 }
 
@@ -396,6 +410,17 @@ private struct DebugPanel: View {
     var body: some View {
         @Bindable var appModel = appModel
         VStack(spacing: 12) {
+            SectionCard(title: "Accessibility") {
+                SettingRowView(
+                    icon: "◉",
+                    label: "Dwell Mode",
+                    desc: "Click buttons by holding your gaze on them. For users who cannot use hand gestures.",
+                    divider: false
+                ) {
+                    ToggleSwitch(value: $appModel.dwellModeEnabled)
+                }
+            }
+
             SectionCard(title: "Debug Mode") {
                 SettingRowView(icon: "⬡", label: "Enable Debug Mode", desc: "Show arm coordinates, EEG signal, collision data", divider: false) {
                     ToggleSwitch(value: $appModel.debugMode)

@@ -220,6 +220,13 @@ struct MyProgressView: View {
                 .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .dwellable(
+                appModel.dwellModeEnabled,
+                duration: appModel.dwellDuration,
+                cornerRadius: 999,
+                action: onBack
+            )
         }
     }
 

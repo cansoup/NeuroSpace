@@ -253,6 +253,12 @@ struct LobbyView: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
+        .dwellable(
+            appModel.dwellModeEnabled,
+            duration: appModel.dwellDuration,
+            cornerRadius: 14,
+            action: action
+        )
     }
 
     // MARK: - Right Column: Stats
