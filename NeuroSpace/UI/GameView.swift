@@ -451,23 +451,8 @@ struct GameControlPanel: View {
         controller.remainingSeconds <= 30
     }
 
-    private var eegColor: Color {
-        switch appModel.bciClient.state {
-        case .connected:    return DS.success
-        case .connecting:   return DS.warning
-        case .disconnected: return DS.gold
-        case .failed:       return DS.error
-        }
-    }
-
-    private var eegLabel: String {
-        switch appModel.bciClient.state {
-        case .connected:     return "Connected"
-        case .connecting:    return "Connecting…"
-        case .disconnected:  return "Disconnected"
-        case .failed(let m): return "Failed: \(m)"
-        }
-    }
+    private var eegColor: Color { appModel.bciClient.state.tint }
+    private var eegLabel: String { appModel.bciClient.state.displayText }
 
     var body: some View {
         VStack(spacing: 0) {
