@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Floating panel attached to the immersive scene during the
-/// left/right/both calibration cue sequence. Shows the current cue, an
-/// indicator dot row, and the steady-focus reminder.
 struct ImmersiveCalibrationPanel: View {
     let cue: CalibrationCue
 

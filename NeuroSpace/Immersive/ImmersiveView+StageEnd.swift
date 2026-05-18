@@ -2,16 +2,8 @@ import SwiftUI
 import RealityKit
 import UIKit
 
-// MARK: - Stage-end sphere helpers
-//
-// Sphere geometry / materials for the three head-tracked option bubbles that
-// replace the flat Congrats / Mission Failed windows, plus the routing
-// helper that handles a confirmed choice (whether it came from a dwell
-// timer or a direct tap).
-
 extension ImmersiveView {
 
-    /// Creates a RealityKit sphere entity styled like a game bubble.
     func makeStageEndSphere(color: UIColor) -> ModelEntity {
         let radius: Float = 0.09
         let entity = ModelEntity(
@@ -29,7 +21,6 @@ extension ImmersiveView {
         return entity
     }
 
-    /// Physically-based material identical to game bubbles.
     func makeStageEndMaterial(color: UIColor, highlighted: Bool) -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
         m.baseColor       = .init(tint: color.withAlphaComponent(highlighted ? 0.55 : 0.30))
@@ -43,11 +34,9 @@ extension ImmersiveView {
         return m
     }
 
-    /// Routes a confirmed stage-end choice (from dwell or direct tap) to the
-    /// appropriate navigation action, mirroring CongratsView / MissionFailedView.
     @MainActor
     func handleStageEndChoice(_ choice: StageEndChoice) {
-        // Reset dwell state immediately so the handler only fires once
+        // Reset immediately so the handler fires once per dwell completion.
         stageEndDwellTarget = nil
         stageEndDwellBeganAt = nil
 

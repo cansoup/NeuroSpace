@@ -20,12 +20,12 @@ final class BubbleGameController {
     var bubbles: [Bubble] = []
     var score: Int = 0
 
-    // Set each frame by ImmersiveView using cursor / eye target
+    // Written each frame by ImmersiveView from the gaze / eye target.
     var targetedBubbleID: UUID? = nil
 
     private(set) var popCount: Int = 0
-    /// Position (root-local coordinates) of the most recently popped bubble.
-    /// Used by ImmersiveView to spawn a spatial pop sound at the right place.
+    // Root-local position of the most recent pop; ImmersiveView spawns the
+    // spatial pop sound here.
     private(set) var lastPoppedBubblePosition: SIMD3<Float>? = nil
 
     var currentStage: Int = 1
@@ -620,17 +620,13 @@ final class BubbleGameController {
         let centerExclusionX: Float = max(0.06, config.bubbleRadius * 0.6)
         let centerExclusionZ: Float = max(0.05, config.bubbleRadius * 0.5)
 
-        // Stage info / control panel keep-out box. Mirrors the panel's runtime
-        // position in ImmersiveView (panel.position = (0.34, 0.18, 0.02))
-        // with a half-extent generous enough to cover the panel even when its
-        // debug section is expanded.
+        // Keep-out for the HUD panel at ImmersiveView (0.34, 0.18, 0.02).
         let panelCenter = SIMD3<Float>(0.34, 0.18, 0.02)
         let panelHalfExtent = SIMD3<Float>(0.18, 0.13, 0.06)
 
-        // Multi-pass placement: try strictest constraints first, then relax
-        // progressively if we can't place all the configured bubbles. This
-        // guarantees stage 1 always renders its full bubbleCount, even when
-        // the panel keep-out and tight axis ranges leave very little room.
+        // Multi-pass: strictest constraints first, then relax so the
+        // configured bubbleCount still spawns when the panel keep-out leaves
+        // tight axis ranges very little room.
         var positions: [SIMD3<Float>] = []
 
         func attempt(maxTries: Int, applyPanelKeepOut: Bool, applyMinDistance: Bool) {
