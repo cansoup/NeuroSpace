@@ -398,6 +398,15 @@ private struct DebugPanel: View {
 
     private var controller: BubbleGameController { appModel.gameController }
 
+    private var bciStateDisplay: String {
+        switch appModel.bciClient.state {
+        case .connected:     return "Connected"
+        case .connecting:    return "Connecting…"
+        case .disconnected:  return "Disconnected"
+        case .failed(let m): return "Failed: \(m)"
+        }
+    }
+
     var body: some View {
         @Bindable var appModel = appModel
         VStack(spacing: 12) {
@@ -453,7 +462,7 @@ private struct DebugPanel: View {
                     debugLine("Active Arm", controller.activeArm.rawValue.capitalized)
                     debugLine("Score", "\(controller.score)")
                     debugLine("Stage", "\(controller.currentStage)/\(StageConfig.totalStages)")
-                    debugLine("EEG", controller.connectionState.displayText)
+                    debugLine("EEG", bciStateDisplay)
                 }
             }
 

@@ -72,8 +72,6 @@ struct ImmersiveView: View {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
         var lastSeenPopCount: Int = 0
-        /// Frame counter used to throttle the per-frame cursor diagnostics.
-        var cursorDebugFrame: Int = 0
         /// One-shot flag: true after we've manually pinned worldAnchor.position
         /// to the user's head pose (because AnchorEntity(.head, .once) doesn't
         /// reliably latch in current visionOS).
@@ -279,9 +277,7 @@ struct ImmersiveView: View {
             let controller = appModel.gameController
 
             if controller.popCount > bubbleStore.lastSeenPopCount {
-                let prev = bubbleStore.lastSeenPopCount
                 bubbleStore.lastSeenPopCount = controller.popCount
-                print("[PopSound] popCount diff \(prev) → \(controller.popCount), state=\(controller.sessionState.rawValue)")
                 if controller.sessionState == .playing,
                    let resource = popSoundResource,
                    let position = controller.lastPoppedBubblePosition {
@@ -289,7 +285,6 @@ struct ImmersiveView: View {
                 }
             } else if controller.popCount < bubbleStore.lastSeenPopCount {
                 // popCount reset (resetGame) — re-sync without playing a sound
-                print("[PopSound] popCount reset \(bubbleStore.lastSeenPopCount) → \(controller.popCount), resyncing")
                 bubbleStore.lastSeenPopCount = controller.popCount
             }
 
@@ -617,10 +612,6 @@ struct ImmersiveView: View {
         let headPos = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
         anchor.position = headPos
         bubbleStore.headAnchorLocked = true
-        print(String(
-            format: "[Anchor] head-locked at (%.2f, %.2f, %.2f)",
-            headPos.x, headPos.y, headPos.z
-        ))
     }
 
     /// Returns a ray from the head centre in the head-forward direction.
@@ -628,13 +619,8 @@ struct ImmersiveView: View {
     private func currentHeadRayInRootSpace() -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
         guard let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
             atTimestamp: CACurrentMediaTime()
-        ) else {
-            print("[Cursor] queryDeviceAnchor nil — head not yet tracked")
-            return nil
-        }
-        guard let anchor = bubbleStore.worldAnchor,
-              let root = anchor.findEntity(named: "Root") else {
-            print("[Cursor] worldAnchor or Root entity missing")
+        ) else { return nil }
+        guard let root = bubbleStore.worldAnchor?.findEntity(named: "Root") else {
             return nil
         }
 
@@ -642,26 +628,12 @@ struct ImmersiveView: View {
         let worldOrigin = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
         let worldForward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
 
-        // Convert into root-local coordinates. The world anchor is now a head
-        // anchor (.once) whose runtime world position depends on where the
-        // user was at session start, so we can't subtract a fixed offset —
-        // let RealityKit do the transform.
+        // The world anchor's runtime position is set by lockHeadAnchorIfNeeded
+        // at session start (since AnchorEntity(.head, .once) doesn't reliably
+        // latch in current visionOS), so use RealityKit's transform-aware
+        // conversion rather than a hand-rolled subtraction.
         let rootOrigin = root.convert(position: worldOrigin, from: nil)
         let rootForward = root.convert(direction: worldForward, from: nil)
-        // One-shot diagnostics: throttle to avoid spamming the console.
-        bubbleStore.cursorDebugFrame += 1
-        if bubbleStore.cursorDebugFrame % 60 == 0 {
-            let anchorWorld = anchor.position(relativeTo: nil)
-            let rootWorld = root.position(relativeTo: nil)
-            print(String(
-                format: "[Cursor] anchor=(%.2f,%.2f,%.2f) rootWorld=(%.2f,%.2f,%.2f) headWorld=(%.2f,%.2f,%.2f) rootOrigin=(%.2f,%.2f,%.2f) rootFwd=(%.2f,%.2f,%.2f)",
-                anchorWorld.x, anchorWorld.y, anchorWorld.z,
-                rootWorld.x, rootWorld.y, rootWorld.z,
-                worldOrigin.x, worldOrigin.y, worldOrigin.z,
-                rootOrigin.x, rootOrigin.y, rootOrigin.z,
-                rootForward.x, rootForward.y, rootForward.z
-            ))
-        }
         return (rootOrigin, simd_normalize(rootForward))
     }
 
@@ -1093,33 +1065,16 @@ struct ImmersiveView: View {
         isVisible: Bool
     ) {
         guard let cursor = bubbleStore.gazeCursor,
-              let marker = bubbleStore.holdMarker else {
-            if bubbleStore.cursorDebugFrame % 60 == 0 {
-                print("[Cursor] gazeCursor/holdMarker entity missing")
-            }
-            return
-        }
+              let marker = bubbleStore.holdMarker else { return }
 
         guard isVisible, let result else {
             cursor.isEnabled = false
             marker.isEnabled = false
-            if bubbleStore.cursorDebugFrame % 60 == 0 {
-                print("[Cursor] hidden — isVisible=\(isVisible) result=\(result == nil ? "nil" : "set")")
-            }
             return
         }
 
         cursor.position = result.cursorPosition
         cursor.isEnabled = true
-        if bubbleStore.cursorDebugFrame % 60 == 0 {
-            let worldPos = cursor.position(relativeTo: nil)
-            print(String(
-                format: "[Cursor] local=(%.2f,%.2f,%.2f) world=(%.2f,%.2f,%.2f) enabled=%@",
-                cursor.position.x, cursor.position.y, cursor.position.z,
-                worldPos.x, worldPos.y, worldPos.z,
-                cursor.isEnabled ? "true" : "false"
-            ))
-        }
 
         if let target = result.bubble {
             marker.position = SIMD3<Float>(
@@ -1172,11 +1127,6 @@ struct ImmersiveView: View {
     /// play the pop sound, and clean up shortly after.
     @MainActor
     private func playPopSound(at position: SIMD3<Float>, parent: Entity, resource: AudioFileResource) {
-        let id = UUID().uuidString.prefix(8)
-        let t = CACurrentMediaTime()
-        let activeBefore = parent.children.filter { $0.name == "PopSound" }.count
-        print("[PopSound] play id=\(id) pos=(\(position.x),\(position.y),\(position.z)) t=\(String(format: "%.3f", t)) activeBefore=\(activeBefore)")
-
         let audioEntity = Entity()
         audioEntity.name = "PopSound"
         audioEntity.position = position
@@ -1187,7 +1137,6 @@ struct ImmersiveView: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             audioEntity.removeFromParent()
-            print("[PopSound] cleanup id=\(id) t=\(String(format: "%.3f", CACurrentMediaTime()))")
         }
     }
 }

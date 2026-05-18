@@ -9,7 +9,6 @@ final class BubbleGameController {
     // MARK: - Public state
 
     var currentIntent: BCIIntent = .idle
-    var connectionState: ConnectionState = .disconnected
     var sessionState: SessionState = .idle
 
     var activeArm: ActiveArm = .right
@@ -225,11 +224,7 @@ final class BubbleGameController {
         bubbles = Self.generateBubbles(for: stageConfig)
     }
 
-    // MARK: - Connection / arm helpers
-
-    func setConnectionState(_ state: ConnectionState) {
-        connectionState = state
-    }
+    // MARK: - Arm helpers
 
     func setActiveArm(_ arm: ActiveArm) {
         activeArm = arm
@@ -286,10 +281,9 @@ final class BubbleGameController {
     private func moveActiveArmToward(_ target: Bubble) {
         let toBubble = target.position - currentArmState.tipPosition
 
-        guard simd_length(toBubble) > 0.001 else {
-            autoPopIfTouching()
-            return
-        }
+        // Arm is already on the bubble — nothing to do. Pop is gated on
+        // the BCI `.both` prediction, not on proximity.
+        guard simd_length(toBubble) > 0.001 else { return }
 
         let direction = simd_normalize(toBubble)
 
@@ -560,11 +554,6 @@ final class BubbleGameController {
         }
 
         return bestBubble
-    }
-
-    private func autoPopIfTouching() {
-        // Intentionally no longer auto-pops during BCI testing.
-        // Pop is now confirmed using the "both" prediction.
     }
 
     private func triggerArmAnimation(for prediction: PredictedClass) {
