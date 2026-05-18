@@ -27,6 +27,12 @@ final class AppModel {
     var immersiveSpaceState: ImmersiveSpaceState = .closed
     var shouldEndSession = false
     var debugMode: Bool = true
+
+    /// Accessibility: when true, SwiftUI buttons that opt-in via `.dwellable`
+    /// auto-fire after the user's gaze rests on them for `dwellDuration`
+    /// seconds. Designed for users who cannot use hand gestures.
+    var dwellModeEnabled: Bool = false
+    var dwellDuration: Double = 1.5
     var selectedEnvironment: EnvironmentChoice = .deepSpace
     /// When false the cursor dot and hold marker are hidden during gameplay.
     /// BCI targeting and HoverEffectComponent highlighting still work normally.
