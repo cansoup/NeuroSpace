@@ -97,17 +97,7 @@ struct LobbyView: View {
                 .frame(height: 36)
                 .padding(.horizontal, 20)
 
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(accentTeal)
-                    .frame(width: 8, height: 8)
-                Text("EEG LINKED")
-                    .font(DS.fontMeta)
-                    .foregroundStyle(DS.teal)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(accentTeal.opacity(0.12), in: Capsule())
+            EEGStatusPill()
 
             HStack {
                 Text("SIGNAL")
