@@ -97,17 +97,7 @@ struct LobbyView: View {
                 .frame(height: 36)
                 .padding(.horizontal, 20)
 
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(accentTeal)
-                    .frame(width: 8, height: 8)
-                Text("EEG LINKED")
-                    .font(DS.fontMeta)
-                    .foregroundStyle(DS.teal)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(accentTeal.opacity(0.12), in: Capsule())
+            eegStatusPill
 
             HStack {
                 Text("SIGNAL")
@@ -140,6 +130,28 @@ struct LobbyView: View {
         .tealGlassCard()
     }
 
+    private var eegStatusPill: some View {
+        let (label, color): (String, Color) = {
+            switch appModel.bciClient.state {
+            case .connected:    return ("CONNECTED", DS.teal)
+            case .connecting:   return ("CONNECTING…", DS.warning)
+            case .disconnected: return ("DISCONNECTED", DS.textTertiary)
+            case .failed:       return ("CONNECTION FAILED", DS.error)
+            }
+        }()
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(DS.fontMeta)
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.12), in: Capsule())
+    }
+
     // MARK: - Center Column: Menu
 
     private var menuPanel: some View {
@@ -153,13 +165,22 @@ struct LobbyView: View {
                         controller.resetGame()
                     }
 
+                    // Returning users skip the L/R/Both calibration cues.
+                    let startGame: () -> Void = {
+                        if appModel.hasCalibrated {
+                            controller.startSession()
+                        } else {
+                            controller.beginCalibration()
+                        }
+                    }
+
                     if appModel.immersiveSpaceState == .closed {
                         appModel.immersiveSpaceState = .inTransition
 
                         switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
                         case .opened:
                             appModel.immersiveSpaceState = .open
-                            controller.beginCalibration()
+                            startGame()
                             dismissWindow(id: appModel.mainWindowID)
 
                         case .userCancelled, .error:
@@ -169,7 +190,7 @@ struct LobbyView: View {
                             appModel.immersiveSpaceState = .closed
                         }
                     } else if appModel.immersiveSpaceState == .open {
-                        controller.beginCalibration()
+                        startGame()
                         dismissWindow(id: appModel.mainWindowID)
                     }
                 }

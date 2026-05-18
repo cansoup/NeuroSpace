@@ -48,7 +48,7 @@ final class BubbleGameController {
 
     private let xLimit: ClosedRange<Float> = -0.38 ... 0.38
     private let yLimit: ClosedRange<Float> = -0.10 ... 0.24
-    private let zLimit: ClosedRange<Float> = -0.22 ... 0.22
+    private let zLimit: ClosedRange<Float> = -0.45 ... 0.22
 
     private let assistRadius: Float = 0.18
     private let maxAssistStrength: Float = 0.28
@@ -634,11 +634,13 @@ final class BubbleGameController {
     // MARK: - Bubble generation
 
     private static func generateBubbles(for config: StageConfig) -> [Bubble] {
-        let xRange: ClosedRange<Float> = config.allowedAxes.contains(.x) ? -0.55 ... 0.55 : -0.04 ... 0.04
-        let yRange: ClosedRange<Float> = config.allowedAxes.contains(.y) ? -0.08 ... 0.30 : 0.08 ... 0.12
-        let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.26 ... 0.14 : -0.06 ... 0.06
+        // Wider X / Y for more spacing; deeper Z so bubbles sit ~1.1-1.4 m
+        // from the user instead of overlapping the head-tracked HUD.
+        let xRange: ClosedRange<Float> = config.allowedAxes.contains(.x) ? -0.70 ... 0.70 : -0.04 ... 0.04
+        let yRange: ClosedRange<Float> = config.allowedAxes.contains(.y) ? -0.18 ... 0.25 : 0.00 ... 0.06
+        let zRange: ClosedRange<Float> = config.allowedAxes.contains(.z) ? -0.40 ... -0.10 : -0.25 ... -0.15
 
-        let minDistance = config.bubbleRadius * 2.0
+        let minDistance = config.bubbleRadius * 2.5
 
         let rightTipStart = SIMD3<Float>(0.16, 0.02, 0.00)
         let leftTipStart  = SIMD3<Float>(-0.16, 0.02, 0.00)

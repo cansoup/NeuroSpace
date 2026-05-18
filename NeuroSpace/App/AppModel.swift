@@ -26,7 +26,7 @@ final class AppModel {
 
     var immersiveSpaceState: ImmersiveSpaceState = .closed
     var shouldEndSession = false
-    var debugMode: Bool = true
+    var debugMode: Bool = false
     var selectedEnvironment: EnvironmentChoice = .deepSpace
     /// When false the cursor dot and hold marker are hidden during gameplay.
     /// BCI targeting and HoverEffectComponent highlighting still work normally.
@@ -42,6 +42,33 @@ final class AppModel {
     /// seconds. Designed for users who cannot use hand gestures.
     var dwellModeEnabled: Bool = false
     var dwellDuration: Double = 1.5
+
+    /// True once the user has completed the left/right/both calibration
+    /// sequence at least once. Persisted across launches so returning users
+    /// skip straight to gameplay. Reset from Settings → Recalibrate.
+    var hasCalibrated: Bool = UserDefaults.standard.bool(forKey: "hasCalibrated") {
+        didSet { UserDefaults.standard.set(hasCalibrated, forKey: "hasCalibrated") }
+    }
+
+    /// WebSocket bridge address. Persisted so the user can edit it from
+    /// Settings and the value survives relaunch.
+    var bciHost: String = (
+        UserDefaults.standard.string(forKey: "bciHost")
+        ?? (Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_HOST") as? String)
+        ?? "192.168.1.10"
+    ) {
+        didSet { UserDefaults.standard.set(bciHost, forKey: "bciHost") }
+    }
+
+    var bciPort: Int = {
+        let saved = UserDefaults.standard.integer(forKey: "bciPort")
+        if saved > 0 { return saved }
+        if let s = Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_PORT") as? String,
+           let p = Int(s) { return p }
+        return 8765
+    }() {
+        didSet { UserDefaults.standard.set(bciPort, forKey: "bciPort") }
+    }
 
     /// True while the in-world stage-end bubble menu is visible inside the immersive space.
     var showStageEndBubbles: Bool = false

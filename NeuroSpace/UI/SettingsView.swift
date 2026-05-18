@@ -405,11 +405,92 @@ private struct DebugPanel: View {
     @Bindable var s: SettingsState
     @Environment(AppModel.self) private var appModel
 
+    @State private var portText: String = ""
+
     private var controller: BubbleGameController { appModel.gameController }
+
+    private var connectionStatusText: String {
+        switch appModel.bciClient.state {
+        case .connected:    return "Connected"
+        case .connecting:   return "Connecting…"
+        case .disconnected: return "Disconnected"
+        case .failed(let m): return "Failed: \(m)"
+        }
+    }
+
+    private var connectionStatusColor: Color {
+        switch appModel.bciClient.state {
+        case .connected:    return DS.teal
+        case .connecting:   return DS.warning
+        case .disconnected: return DS.textTertiary
+        case .failed:       return DS.error
+        }
+    }
+
+    private func reconnect() {
+        let resolved = Int(portText) ?? appModel.bciPort
+        appModel.bciPort = resolved
+        portText = "\(resolved)"
+        appModel.bciClient.connect(host: appModel.bciHost, port: resolved)
+    }
 
     var body: some View {
         @Bindable var appModel = appModel
         VStack(spacing: 12) {
+            SectionCard(title: "Connection") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(connectionStatusColor)
+                            .frame(width: 8, height: 8)
+                        Text(connectionStatusText)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(connectionStatusColor)
+                    }
+
+                    HStack(spacing: 10) {
+                        Text("HOST")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundStyle(DS.textTertiary)
+                            .frame(width: 40, alignment: .leading)
+                        TextField("192.168.x.y", text: $appModel.bciHost)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(DS.textPrimary)
+                            .autocorrectionDisabled(true)
+                            .textInputAutocapitalization(.never)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    HStack(spacing: 10) {
+                        Text("PORT")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundStyle(DS.textTertiary)
+                            .frame(width: 40, alignment: .leading)
+                        TextField("8765", text: $portText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(DS.textPrimary)
+                            .keyboardType(.numberPad)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                            .frame(width: 110)
+                        Spacer()
+                        Button("Reconnect") { reconnect() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(DS.teal)
+                            .controlSize(.small)
+                    }
+                }
+                .padding(.vertical, 4)
+                .onAppear { if portText.isEmpty { portText = "\(appModel.bciPort)" } }
+            }
+
             SectionCard(title: "Accessibility") {
                 SettingRowView(
                     icon: "◉",
@@ -418,6 +499,25 @@ private struct DebugPanel: View {
                     divider: false
                 ) {
                     ToggleSwitch(value: $appModel.dwellModeEnabled)
+                }
+            }
+
+            SectionCard(title: "Calibration") {
+                SettingRowView(
+                    icon: "✦",
+                    label: "Hand Calibration",
+                    desc: appModel.hasCalibrated
+                        ? "Already calibrated — new sessions skip the cue sequence."
+                        : "Will run once when you start the next session.",
+                    divider: false
+                ) {
+                    Button(appModel.hasCalibrated ? "Recalibrate" : "Pending") {
+                        appModel.hasCalibrated = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(DS.teal)
+                    .controlSize(.small)
+                    .disabled(!appModel.hasCalibrated)
                 }
             }
 

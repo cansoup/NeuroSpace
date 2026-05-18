@@ -4,12 +4,10 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var appModel
     let onContinue: () -> Void
 
-    @State private var host: String =
-        (Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_HOST") as? String) ?? "192.168.1.10"
-    @State private var portText: String =
-        (Bundle.main.object(forInfoDictionaryKey: "BCI_DEFAULT_PORT") as? String) ?? "8765"
+    @State private var portText: String = ""
 
-    private var port: Int { Int(portText) ?? 8765 }
+    private var host: String { appModel.bciHost }
+    private var port: Int { Int(portText) ?? appModel.bciPort }
 
     private var isConnected: Bool { appModel.isEEGConnected }
     private var isConnecting: Bool {
@@ -46,6 +44,7 @@ struct OnboardingView: View {
             .shadow(color: DS.teal.opacity(0.08), radius: 60)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { portText = "\(appModel.bciPort)" }
     }
 
     // MARK: - Header
@@ -177,12 +176,13 @@ struct OnboardingView: View {
     }
 
     private var hostField: some View {
-        HStack(spacing: 6) {
+        @Bindable var appModel = appModel
+        return HStack(spacing: 6) {
             Text("HOST")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(DS.textTertiary)
-            TextField("192.168.x.y", text: $host)
+            TextField("192.168.x.y", text: $appModel.bciHost)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(DS.textPrimary)
@@ -279,7 +279,10 @@ struct OnboardingView: View {
     }
 
     private func connect() {
-        appModel.bciClient.connect(host: host, port: port)
+        let resolvedPort = Int(portText) ?? appModel.bciPort
+        appModel.bciPort = resolvedPort
+        portText = "\(resolvedPort)"
+        appModel.bciClient.connect(host: appModel.bciHost, port: resolvedPort)
     }
 }
 

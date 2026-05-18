@@ -448,11 +448,20 @@ struct GameControlPanel: View {
     }
 
     private var eegColor: Color {
-        switch controller.connectionState {
+        switch appModel.bciClient.state {
         case .connected:    return DS.success
         case .connecting:   return DS.warning
         case .disconnected: return DS.gold
         case .failed:       return DS.error
+        }
+    }
+
+    private var eegLabel: String {
+        switch appModel.bciClient.state {
+        case .connected:     return "Connected"
+        case .connecting:    return "Connecting…"
+        case .disconnected:  return "Disconnected"
+        case .failed(let m): return "Failed: \(m)"
         }
     }
 
@@ -496,7 +505,7 @@ struct GameControlPanel: View {
                         .fill(eegColor)
                         .frame(width: 8, height: 8)
 
-                    Text(controller.connectionState.displayText)
+                    Text(eegLabel)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
 
@@ -550,64 +559,80 @@ struct GameControlPanel: View {
                 }
                 .padding(16)
 
-                if appModel.debugMode {
-                    Divider().opacity(0.3)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("JSON ARM TEST")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1)
-
-                        Text(appModel.jsonPlayback.statusText)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(DS.teal)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.75)
-
-                        HStack(spacing: 8) {
-                            Button("Load") {
-                                appModel.jsonPlayback.loadJSON(named: "bci_test_data")
-                            }
-                            .controlSize(.small)
-
-                            Button(appModel.jsonPlayback.isPlaying ? "Playing" : "Play") {
-                                appModel.jsonPlayback.startPlayback(interval: 0.35)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(appModel.jsonPlayback.isPlaying ? .green : DS.teal)
-                            .controlSize(.small)
-
-                            Button("Stop") {
-                                appModel.jsonPlayback.stopPlayback()
-                            }
-                            .controlSize(.small)
-                        }
-
-                        HStack(spacing: 8) {
-                            Text("Loaded: \(appModel.jsonPlayback.loadedCountText)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-
-                            Text("Arm: \(controller.activeArm.rawValue.capitalized)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Text("Vector: \(controller.motionVectorText)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-                }
+                // JSON playback debug controls moved to JSONDebugPanel
+                // (separate attachment shown only when debugMode is on).
             }
         }
         .frame(width: 340)
+        .background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: DS.radiusXl))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.radiusXl)
+                .strokeBorder(DS.teal.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - JSON Debug Panel (world-anchored, debug mode only)
+
+struct JSONDebugPanel: View {
+    @Environment(AppModel.self) private var appModel
+
+    private var controller: BubbleGameController { appModel.gameController }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("JSON ARM TEST")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.secondary)
+                .tracking(1)
+
+            Text(appModel.jsonPlayback.statusText)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(DS.teal)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+
+            HStack(spacing: 8) {
+                Button("Load") {
+                    appModel.jsonPlayback.loadJSON(named: "bci_test_data")
+                }
+                .controlSize(.small)
+
+                Button(appModel.jsonPlayback.isPlaying ? "Playing" : "Play") {
+                    appModel.jsonPlayback.startPlayback(interval: 0.35)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(appModel.jsonPlayback.isPlaying ? .green : DS.teal)
+                .controlSize(.small)
+
+                Button("Stop") {
+                    appModel.jsonPlayback.stopPlayback()
+                }
+                .controlSize(.small)
+            }
+
+            Divider().opacity(0.3)
+
+            HStack(spacing: 8) {
+                Text("Loaded: \(appModel.jsonPlayback.loadedCountText)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("Arm: \(controller.activeArm.rawValue.capitalized)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Vector: \(controller.motionVectorText)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(14)
+        .frame(width: 260)
         .background(Color(hex: 0x080E1C, alpha: 0.75), in: RoundedRectangle(cornerRadius: DS.radiusXl))
         .overlay(
             RoundedRectangle(cornerRadius: DS.radiusXl)

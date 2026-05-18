@@ -72,6 +72,11 @@ struct ImmersiveView: View {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
         var lastSeenPopCount: Int = 0
+        /// Drives hover-arm display: tracks which bubble color the user is
+        /// currently looking at so the matching hand pose stays visible.
+        var lastHoveredBubbleType: BubbleType? = nil
+        /// True while both-hand cue is shown for the stage-end dwell menu.
+        var stageEndHandsShown: Bool = false
         weak var worldAnchor: AnchorEntity?
         weak var armsAnchor: AnchorEntity?
         weak var backgroundPlane: Entity?
@@ -88,18 +93,19 @@ struct ImmersiveView: View {
     }
 
     /// Root content offset relative to the head anchor at session start.
-    /// Y = -0.11 m compensates for the bubble Y-range bias (-0.08 ... 0.30,
-    /// midpoint ≈ +0.11) so spawned bubbles average at the user's actual
-    /// eye level instead of above it. Z = -1.0 m places the play space one
-    /// metre in front of the user.
-    private let worldAnchorOffset = SIMD3<Float>(0, -0.11, -1.0)
+    /// Y = -0.035 m compensates for the bubble Y-range bias (-0.18 ... 0.25,
+    /// midpoint ≈ +0.035) so spawned bubbles average at the user's actual
+    /// eye level. Z = -1.0 m anchors the play space one metre in front of
+    /// the user; bubble z range pushes targets out to 1.1 - 1.4 m so they
+    /// sit beyond the head-tracked HUD.
+    private let worldAnchorOffset = SIMD3<Float>(0, -0.035, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
 
     // How close (metres) the head ray must pass to a bubble to select it
     private let gazeSelectRadius: Float = 0.11
     private let gazeDwellDuration: TimeInterval = 0.65
     /// Longer dwell for stage-end option bubbles — gives the user time to decide.
-    private let stageEndDwellDuration: TimeInterval = 5.0
+    private let stageEndDwellDuration: TimeInterval = 3.0
 
     var body: some View {
         RealityView { content, attachments in
@@ -137,17 +143,24 @@ struct ImmersiveView: View {
             root.addChild(holdMarker)
             bubbleStore.holdMarker = holdMarker
 
-            if let panel = attachments.entity(for: "controlPanel") {
-                panel.name = "ControlPanel"
-                panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
-                panel.scale = SIMD3<Float>(repeating: 0.92)
-                root.addChild(panel)
-            }
+            // Control panel (score / time / EEG status) is attached later to
+            // armsAnchor so it stays head-locked, just above the progress bar.
 
             if let calibrationPanel = attachments.entity(for: "calibrationPanel") {
                 calibrationPanel.name = "CalibrationPanel"
                 calibrationPanel.position = SIMD3<Float>(0.0, 0.18, 0.02)
                 root.addChild(calibrationPanel)
+            }
+
+            // JSON playback debug panel — world-anchored to the right of the
+            // play space. Shown only when appModel.debugMode is on; gated in
+            // the update closure.
+            if let jsonDebug = attachments.entity(for: "jsonDebugPanel") {
+                jsonDebug.name = "JSONDebugPanel"
+                jsonDebug.position = SIMD3<Float>(0.40, 0.18, 0.02)
+                jsonDebug.scale = SIMD3<Float>(repeating: 0.85)
+                jsonDebug.isEnabled = appModel.debugMode
+                root.addChild(jsonDebug)
             }
 
             worldAnchor.addChild(root)
@@ -203,6 +216,15 @@ struct ImmersiveView: View {
                 progressBar.position = SIMD3<Float>(0.0, -0.16, -0.50)
                 progressBar.scale = SIMD3<Float>(repeating: 0.85)
                 armsAnchor.addChild(progressBar)
+            }
+
+            // Score / time HUD — head-tracked so it follows the user's gaze,
+            // positioned just above the progress bar at y=-0.16.
+            if let panel = attachments.entity(for: "controlPanel") {
+                panel.name = "ControlPanel"
+                panel.position = SIMD3<Float>(0.0, -0.10, -0.50)
+                panel.scale = SIMD3<Float>(repeating: 0.55)
+                armsAnchor.addChild(panel)
             }
 
             // Result card: world-anchored, sits just above the option bubbles
@@ -318,9 +340,10 @@ struct ImmersiveView: View {
                 calibrationPanel.position = SIMD3<Float>(0.0, 0.18, 0.02)
             }
 
-            if let panel = root.findEntity(named: "ControlPanel") {
-                panel.position = SIMD3<Float>(0.34, 0.18, 0.02)
-                panel.scale = SIMD3<Float>(repeating: 0.92)
+            // Control panel lives on armsAnchor now — no per-frame update needed.
+
+            if let jsonDebug = root.findEntity(named: "JSONDebugPanel") {
+                jsonDebug.isEnabled = appModel.debugMode
             }
 
             // Show/hide stage-end spheres and sync which options are available
@@ -358,6 +381,11 @@ struct ImmersiveView: View {
 
             Attachment(id: "calibrationPanel") {
                 ImmersiveCalibrationPanel(cue: calibrationCue)
+            }
+
+            Attachment(id: "jsonDebugPanel") {
+                JSONDebugPanel()
+                    .environment(appModel)
             }
 
             Attachment(id: "progressBar") {
@@ -462,6 +490,7 @@ struct ImmersiveView: View {
                     stageEndDwellBeganAt = nil
                     stageEndDwellFired = false
                     stageEndDwellProgress = 0.0
+                    bubbleStore.stageEndHandsShown = false
                     appModel.showStageEndBubbles = true
 
                     // Show result as a head-tracked attachment — no floating window
@@ -600,13 +629,19 @@ struct ImmersiveView: View {
         guard let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
             atTimestamp: CACurrentMediaTime()
         ) else { return nil }
+        guard let root = bubbleStore.worldAnchor?.findEntity(named: "Root") else { return nil }
 
         let t = deviceAnchor.originFromAnchorTransform
-
         let worldOrigin = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
         let worldForward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
 
-        return (worldOrigin - worldAnchorOffset, simd_normalize(worldForward))
+        // Convert into root-local coordinates. The world anchor is now a head
+        // anchor (.once) whose runtime world position depends on where the
+        // user was at session start, so we can't subtract a fixed offset
+        // anymore — let RealityKit do the transform.
+        let rootOrigin = root.convert(position: worldOrigin, from: nil)
+        let rootForward = root.convert(direction: worldForward, from: nil)
+        return (rootOrigin, simd_normalize(rootForward))
     }
 
     /// Exponential moving average — smooths cursor movement so it doesn't snap.
@@ -678,6 +713,8 @@ struct ImmersiveView: View {
             // Hide cursor outside of gameplay
             bubbleStore.gazeCursor?.isEnabled = false
             bubbleStore.holdMarker?.isEnabled = false
+            // Clear any lingering hover arm so it doesn't stay across stages
+            applyHoverArm(for: nil)
             return
         }
 
@@ -686,6 +723,9 @@ struct ImmersiveView: View {
         // BCI targeting always runs — bubbles still respond to EEG signals
         // and HoverEffectComponent highlighting still works regardless of cursor visibility.
         controller.targetedBubbleID = gazeResult.bubble?.id
+
+        // Hover-arm cue: red bubble → right hand pose, blue bubble → left.
+        applyHoverArm(for: gazeResult.bubble?.type)
 
         // Cursor and hold marker only render when showCursor is enabled
         updateGazeCursorAndMarker(result: gazeResult, isVisible: appModel.showCursor)
@@ -740,11 +780,24 @@ struct ImmersiveView: View {
                     handleStageEndChoice(choice)
                 }
             }
+            // While dwelling on a menu sphere, cue the user with both hands.
+            if !bubbleStore.stageEndHandsShown,
+               let armsRoot = bubbleStore.armsAnchor?.findEntity(named: "ArmsRoot") {
+                handVisibilityToken += 1
+                showHands([.left, .right], in: armsRoot)
+                bubbleStore.stageEndHandsShown = true
+            }
         } else {
             // Not looking at any sphere — reset
             stageEndDwellTarget = nil
             stageEndDwellBeganAt = nil
             stageEndDwellProgress = 0.0
+            if bubbleStore.stageEndHandsShown,
+               let armsRoot = bubbleStore.armsAnchor?.findEntity(named: "ArmsRoot") {
+                handVisibilityToken += 1
+                hideAllHandPoses(in: armsRoot)
+                bubbleStore.stageEndHandsShown = false
+            }
         }
     }
 
@@ -774,6 +827,7 @@ struct ImmersiveView: View {
 
         guard nextIndex < cues.count else {
             hideAllHandPoses(in: armsRoot)
+            appModel.hasCalibrated = true
             controller.completeCalibration()
             return
         }
@@ -889,6 +943,22 @@ struct ImmersiveView: View {
         return token
     }
 
+    /// Mirror the hovered bubble's color to the matching arm pose. Idempotent
+    /// — only mutates RealityKit state when the hovered type actually changes.
+    @MainActor
+    private func applyHoverArm(for type: BubbleType?) {
+        guard bubbleStore.lastHoveredBubbleType != type else { return }
+        bubbleStore.lastHoveredBubbleType = type
+        guard let armsRoot = bubbleStore.armsAnchor?.findEntity(named: "ArmsRoot") else { return }
+        // Invalidate any pending BCI auto-hide so the hover pose stays put.
+        handVisibilityToken += 1
+        switch type {
+        case .red:  showHands([.right], in: armsRoot)
+        case .blue: showHands([.left], in: armsRoot)
+        case nil:   hideAllHandPoses(in: armsRoot)
+        }
+    }
+
     @MainActor
     private func showHands(_ arms: [ActiveArm], in armsRoot: Entity) {
         let targetNames = Set(arms.map(handPoseName(for:)))
@@ -964,6 +1034,9 @@ struct ImmersiveView: View {
 
     private func makeBubbleEntity(for bubble: Bubble, highlighted: Bool = false) -> ModelEntity {
         let radius = appModel.gameController.stageConfig.bubbleRadius
+        // Generous hit-radius so smaller / further-away bubbles still pop on
+        // pinch-tap and gaze-snap reliably.
+        let hitRadius = max(radius * 1.6, radius + 0.03)
 
         let entity = ModelEntity(
             mesh: .generateSphere(radius: radius),
@@ -972,7 +1045,7 @@ struct ImmersiveView: View {
         entity.name = "Bubble_\(bubble.id.uuidString)"
         entity.position = bubble.position
         entity.scale = SIMD3<Float>(repeating: highlighted ? 1.18 : 1.0)
-        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
+        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: hitRadius)]))
         entity.components.set(InputTargetComponent())
         // HoverEffectComponent: the system uses real eye tracking to render a glow
         // when the user looks at this bubble. No callback is available — Apple
