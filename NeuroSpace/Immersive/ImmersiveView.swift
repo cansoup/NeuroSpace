@@ -844,22 +844,29 @@ struct ImmersiveView: View {
             return
         }
 
+        // Every BCI prediction (left / right / both) triggers a pop on the
+        // currently gazed bubble after the hand-animation lead-in. The arm
+        // shown is the one implied by the prediction (or the active arm for
+        // .both). Unified path — previously only .both fired the pop.
+        let arm: ActiveArm
+        let hideDelay: TimeInterval
         switch prediction {
         case .left:
-            showHand(.left, in: armsRoot, hideAfter: 0.90)
-
+            arm = .left
+            hideDelay = 0.90
         case .right:
-            showHand(.right, in: armsRoot, hideAfter: 0.90)
-
+            arm = .right
+            hideDelay = 0.90
         case .both:
-            let hand = visibleHand(in: armsRoot) ?? controller.activeArm
-            let token = showHand(hand, in: armsRoot, hideAfter: 1.05)
+            arm = visibleHand(in: armsRoot) ?? controller.activeArm
+            hideDelay = 1.05
+        }
 
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.46))
-                guard handVisibilityToken == token else { return }
-                controller.completeArmAnimationPop()
-            }
+        let token = showHand(arm, in: armsRoot, hideAfter: hideDelay)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.46))
+            guard handVisibilityToken == token else { return }
+            controller.completeArmAnimationPop()
         }
     }
 
