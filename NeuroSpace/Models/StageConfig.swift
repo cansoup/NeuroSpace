@@ -20,13 +20,6 @@ struct StageConfig {
         static let xyz: AxisSet = [.x, .y, .z]
     }
 
-    // MARK: - Arm mode
-
-    enum ArmMode: Equatable {
-        case singleActive   // whichever arm is currently selected by the player
-        case bilateral      // each bubble is assigned to a specific arm
-    }
-
     // MARK: - Unlock criteria
 
     struct UnlockCriteria {
@@ -43,7 +36,6 @@ struct StageConfig {
     let bubbleCount:     Int
     let bubbleRadius:    Float
     let allowedAxes:     AxisSet
-    let armMode:         ArmMode
     let bubbleSpeed:     ClosedRange<Float>    // 0...0 for static bubbles
     let bubbleLifetime:  Double?               // nil = lives until explicitly popped
     let respawnsEnabled: Bool                  // continuously respawn after all gone
@@ -51,8 +43,6 @@ struct StageConfig {
     let unlockCriteria:  UnlockCriteria
 
     // MARK: - Helpers
-
-    var isBilateral: Bool { armMode == .bilateral }
 
     /// Returns whether a BCI intent is permitted in this stage.
     func isIntentAllowed(_ intent: BCIIntent) -> Bool {
@@ -82,7 +72,6 @@ extension StageConfig {
             bubbleCount: 3,
             bubbleRadius: 0.12,
             allowedAxes: .x,
-            armMode: .singleActive,
             bubbleSpeed: 0...0,
             bubbleLifetime: nil,
             respawnsEnabled: false,
@@ -100,7 +89,6 @@ extension StageConfig {
             bubbleCount: 6,
             bubbleRadius: 0.09,
             allowedAxes: .xy,
-            armMode: .singleActive,
             bubbleSpeed: 0...0,
             bubbleLifetime: nil,
             respawnsEnabled: false,
@@ -118,25 +106,23 @@ extension StageConfig {
             bubbleCount: 8,
             bubbleRadius: 0.06,
             allowedAxes: .xyz,
-            armMode: .singleActive,
             bubbleSpeed: 0...0,
             bubbleLifetime: nil,
             respawnsEnabled: false,
             unlockCriteria: UnlockCriteria(minimumAccuracy: 0.75, requiredPops: 6)
         ),
 
-        // ── Stage 4 · Bilateral Coordination ─────────────────────────────────
-        // Each bubble is colour-coded to a specific arm.
-        // Trains rapid hemispheric switching — the neural basis of bimanual ADL.
+        // ── Stage 4 · Precision Control ──────────────────────────────────────
+        // Higher bubble density in full 3-D space — pushes spatial accuracy
+        // and sustained motor-imagery focus.
         StageConfig(
             number: 4,
-            title: "Bilateral Coordination",
-            description: "Switch between left and right arm motor imagery. Each bubble is assigned to a specific arm.",
+            title: "Precision Control",
+            description: "Higher target density in full 3D space. Sustained focus and accuracy under load.",
             duration: 120,
             bubbleCount: 10,
             bubbleRadius: 0.06,
             allowedAxes: .xyz,
-            armMode: .bilateral,
             bubbleSpeed: 0...0,
             bubbleLifetime: nil,
             respawnsEnabled: false,
@@ -149,12 +135,11 @@ extension StageConfig {
         StageConfig(
             number: 5,
             title: "Dynamic Flow",
-            description: "Pop moving targets before they disappear. Both arms, full 3D, under time pressure.",
+            description: "Pop moving targets before they disappear. Full 3D, under time pressure.",
             duration: 120,
             bubbleCount: 6,
             bubbleRadius: 0.06,
             allowedAxes: .xyz,
-            armMode: .bilateral,
             bubbleSpeed: 0.02...0.05,
             bubbleLifetime: 12.0,
             respawnsEnabled: true,

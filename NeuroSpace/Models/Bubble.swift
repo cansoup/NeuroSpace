@@ -51,7 +51,6 @@ struct Bubble: Identifiable, Equatable {
     var type: BubbleType
 
     // Stage-aware fields
-    var assignedArm: ActiveArm?    // nil = any arm; set in bilateral stages (4 & 5)
     var velocity: SIMD3<Float>     // non-zero in dynamic stages (5)
     var spawnTime: Date            // used for lifetime tracking
     var lifetime: Double?          // nil = lives until explicitly popped
@@ -61,7 +60,6 @@ struct Bubble: Identifiable, Equatable {
         position: SIMD3<Float>,
         isPopped: Bool = false,
         type: BubbleType = .red,
-        assignedArm: ActiveArm? = nil,
         velocity: SIMD3<Float> = .zero,
         spawnTime: Date = Date(),
         lifetime: Double? = nil
@@ -70,7 +68,6 @@ struct Bubble: Identifiable, Equatable {
         self.position = position
         self.isPopped = isPopped
         self.type = type
-        self.assignedArm = assignedArm
         self.velocity = velocity
         self.spawnTime = spawnTime
         self.lifetime = lifetime
@@ -85,20 +82,11 @@ struct Bubble: Identifiable, Equatable {
     /// True when the bubble should no longer be rendered or interacted with.
     var isGone: Bool { isPopped || isExpired }
 
-    /// Whether the given arm is allowed to pop this bubble.
-    /// Bubbles with `assignedArm == nil` accept any arm (single-active stages).
-    /// Bilateral stages set `assignedArm` to enforce arm-specific pops.
-    func canBePopped(by arm: ActiveArm) -> Bool {
-        guard let assigned = assignedArm else { return true }
-        return assigned == arm
-    }
-
     static func == (lhs: Bubble, rhs: Bubble) -> Bool {
         lhs.id == rhs.id &&
         lhs.position == rhs.position &&
         lhs.isPopped == rhs.isPopped &&
         lhs.type == rhs.type &&
-        lhs.assignedArm == rhs.assignedArm &&
         lhs.velocity == rhs.velocity
     }
 }
