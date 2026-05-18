@@ -93,6 +93,8 @@ struct CongratsView: View {
                         )
                     )
             }
+
+            EEGStatusPill()
         }
     }
 
@@ -313,6 +315,8 @@ struct MissionFailedView: View {
                     .foregroundStyle(DS.textTertiary)
                     .padding(.top, 2)
             }
+
+            EEGStatusPill()
         }
     }
 
@@ -448,11 +452,20 @@ struct GameControlPanel: View {
     }
 
     private var eegColor: Color {
-        switch controller.connectionState {
+        switch appModel.bciClient.state {
         case .connected:    return DS.success
         case .connecting:   return DS.warning
         case .disconnected: return DS.gold
         case .failed:       return DS.error
+        }
+    }
+
+    private var eegLabel: String {
+        switch appModel.bciClient.state {
+        case .connected:     return "Connected"
+        case .connecting:    return "Connecting…"
+        case .disconnected:  return "Disconnected"
+        case .failed(let m): return "Failed: \(m)"
         }
     }
 
@@ -496,7 +509,7 @@ struct GameControlPanel: View {
                         .fill(eegColor)
                         .frame(width: 8, height: 8)
 
-                    Text(controller.connectionState.displayText)
+                    Text(eegLabel)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
 

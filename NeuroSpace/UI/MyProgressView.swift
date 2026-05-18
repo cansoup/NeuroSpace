@@ -193,18 +193,7 @@ struct MyProgressView: View {
 
             Spacer()
 
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(accent)
-                    .frame(width: 6, height: 6)
-                Text("EEG LINKED")
-                    .font(DS.fontMeta)
-                    .foregroundStyle(accent)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(accent.opacity(0.10), in: Capsule())
-            .overlay(Capsule().strokeBorder(accent.opacity(0.30), lineWidth: 1))
+            EEGStatusPill()
 
             Button(action: onBack) {
                 HStack(spacing: 6) {
@@ -220,6 +209,13 @@ struct MyProgressView: View {
                 .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .dwellable(
+                appModel.dwellModeEnabled,
+                duration: appModel.dwellDuration,
+                cornerRadius: 999,
+                action: onBack
+            )
         }
     }
 

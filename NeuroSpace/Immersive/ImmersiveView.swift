@@ -72,6 +72,12 @@ struct ImmersiveView: View {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
         var lastSeenPopCount: Int = 0
+        /// Frame counter used to throttle the per-frame cursor diagnostics.
+        var cursorDebugFrame: Int = 0
+        /// One-shot flag: true after we've manually pinned worldAnchor.position
+        /// to the user's head pose (because AnchorEntity(.head, .once) doesn't
+        /// reliably latch in current visionOS).
+        var headAnchorLocked: Bool = false
         weak var worldAnchor: AnchorEntity?
         weak var armsAnchor: AnchorEntity?
         weak var backgroundPlane: Entity?
@@ -87,7 +93,12 @@ struct ImmersiveView: View {
         var smoothedCursorPosition: SIMD3<Float>? = nil
     }
 
-    private let worldAnchorOffset = SIMD3<Float>(0, 1.45, -1.0)
+    /// Root content offset relative to the head anchor at session start.
+    /// Y = -0.11 m compensates for the bubble Y-range bias (-0.08 ... 0.30,
+    /// midpoint ≈ +0.11) so spawned bubbles and the centred UI panels sit
+    /// at the user's actual eye level instead of above it. Z = -1.0 m
+    /// anchors the play space one metre in front of the user.
+    private let worldAnchorOffset = SIMD3<Float>(0, -0.11, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
 
     // How close (metres) the head ray must pass to a bubble to select it
@@ -98,12 +109,17 @@ struct ImmersiveView: View {
 
     var body: some View {
         RealityView { content, attachments in
-            let worldAnchor = AnchorEntity(world: worldAnchorOffset)
+            // We can't rely on AnchorEntity(.head, .once) — in current
+            // visionOS it sometimes never latches, leaving the anchor at the
+            // world origin (the play space ends up on the floor). Instead we
+            // start with a world-fixed anchor and snap its position to the
+            // user's actual head pose once ARKit reports it (see .task loop).
+            let worldAnchor = AnchorEntity(world: .zero)
             worldAnchor.name = "WorldAnchor"
 
             let root = Entity()
             root.name = "Root"
-            root.position = .zero
+            root.position = worldAnchorOffset
 
             let bgEntity = Entity()
             bgEntity.name = "BackgroundPlane"
@@ -484,6 +500,7 @@ struct ImmersiveView: View {
 
             while !Task.isCancelled {
                 appModel.gameController.update(deltaTime: 1.0 / 60.0)
+                lockHeadAnchorIfNeeded()
                 updateCalibrationCue()
                 updateBackgroundPlane()
                 updateCursorEveryFrame()
@@ -585,19 +602,67 @@ struct ImmersiveView: View {
         }
     }
 
+    /// Snaps the world anchor to the user's actual head position the first
+    /// time ARKit reports a tracked device anchor. Compensates for visionOS
+    /// occasionally never latching AnchorEntity(.head, .once).
+    @MainActor
+    private func lockHeadAnchorIfNeeded() {
+        guard !bubbleStore.headAnchorLocked,
+              let anchor = bubbleStore.worldAnchor,
+              let device = bubbleStore.worldTracking.queryDeviceAnchor(
+                  atTimestamp: CACurrentMediaTime()
+              ) else { return }
+
+        let t = device.originFromAnchorTransform
+        let headPos = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
+        anchor.position = headPos
+        bubbleStore.headAnchorLocked = true
+        print(String(
+            format: "[Anchor] head-locked at (%.2f, %.2f, %.2f)",
+            headPos.x, headPos.y, headPos.z
+        ))
+    }
+
     /// Returns a ray from the head centre in the head-forward direction.
     /// The cursor follows this ray; HoverEffectComponent uses real eye tracking.
     private func currentHeadRayInRootSpace() -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
         guard let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
             atTimestamp: CACurrentMediaTime()
-        ) else { return nil }
+        ) else {
+            print("[Cursor] queryDeviceAnchor nil — head not yet tracked")
+            return nil
+        }
+        guard let anchor = bubbleStore.worldAnchor,
+              let root = anchor.findEntity(named: "Root") else {
+            print("[Cursor] worldAnchor or Root entity missing")
+            return nil
+        }
 
         let t = deviceAnchor.originFromAnchorTransform
-
         let worldOrigin = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
         let worldForward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
 
-        return (worldOrigin - worldAnchorOffset, simd_normalize(worldForward))
+        // Convert into root-local coordinates. The world anchor is now a head
+        // anchor (.once) whose runtime world position depends on where the
+        // user was at session start, so we can't subtract a fixed offset —
+        // let RealityKit do the transform.
+        let rootOrigin = root.convert(position: worldOrigin, from: nil)
+        let rootForward = root.convert(direction: worldForward, from: nil)
+        // One-shot diagnostics: throttle to avoid spamming the console.
+        bubbleStore.cursorDebugFrame += 1
+        if bubbleStore.cursorDebugFrame % 60 == 0 {
+            let anchorWorld = anchor.position(relativeTo: nil)
+            let rootWorld = root.position(relativeTo: nil)
+            print(String(
+                format: "[Cursor] anchor=(%.2f,%.2f,%.2f) rootWorld=(%.2f,%.2f,%.2f) headWorld=(%.2f,%.2f,%.2f) rootOrigin=(%.2f,%.2f,%.2f) rootFwd=(%.2f,%.2f,%.2f)",
+                anchorWorld.x, anchorWorld.y, anchorWorld.z,
+                rootWorld.x, rootWorld.y, rootWorld.z,
+                worldOrigin.x, worldOrigin.y, worldOrigin.z,
+                rootOrigin.x, rootOrigin.y, rootOrigin.z,
+                rootForward.x, rootForward.y, rootForward.z
+            ))
+        }
+        return (rootOrigin, simd_normalize(rootForward))
     }
 
     /// Exponential moving average — smooths cursor movement so it doesn't snap.
@@ -844,22 +909,29 @@ struct ImmersiveView: View {
             return
         }
 
+        // Every BCI prediction (left / right / both) triggers a pop on the
+        // currently gazed bubble after the hand-animation lead-in. The arm
+        // shown is the one implied by the prediction (or the active arm for
+        // .both). Unified path — previously only .both fired the pop.
+        let arm: ActiveArm
+        let hideDelay: TimeInterval
         switch prediction {
         case .left:
-            showHand(.left, in: armsRoot, hideAfter: 0.90)
-
+            arm = .left
+            hideDelay = 0.90
         case .right:
-            showHand(.right, in: armsRoot, hideAfter: 0.90)
-
+            arm = .right
+            hideDelay = 0.90
         case .both:
-            let hand = visibleHand(in: armsRoot) ?? controller.activeArm
-            let token = showHand(hand, in: armsRoot, hideAfter: 1.05)
+            arm = visibleHand(in: armsRoot) ?? controller.activeArm
+            hideDelay = 1.05
+        }
 
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.46))
-                guard handVisibilityToken == token else { return }
-                controller.completeArmAnimationPop()
-            }
+        let token = showHand(arm, in: armsRoot, hideAfter: hideDelay)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.46))
+            guard handVisibilityToken == token else { return }
+            controller.completeArmAnimationPop()
         }
     }
 
@@ -1021,16 +1093,33 @@ struct ImmersiveView: View {
         isVisible: Bool
     ) {
         guard let cursor = bubbleStore.gazeCursor,
-              let marker = bubbleStore.holdMarker else { return }
+              let marker = bubbleStore.holdMarker else {
+            if bubbleStore.cursorDebugFrame % 60 == 0 {
+                print("[Cursor] gazeCursor/holdMarker entity missing")
+            }
+            return
+        }
 
         guard isVisible, let result else {
             cursor.isEnabled = false
             marker.isEnabled = false
+            if bubbleStore.cursorDebugFrame % 60 == 0 {
+                print("[Cursor] hidden — isVisible=\(isVisible) result=\(result == nil ? "nil" : "set")")
+            }
             return
         }
 
         cursor.position = result.cursorPosition
         cursor.isEnabled = true
+        if bubbleStore.cursorDebugFrame % 60 == 0 {
+            let worldPos = cursor.position(relativeTo: nil)
+            print(String(
+                format: "[Cursor] local=(%.2f,%.2f,%.2f) world=(%.2f,%.2f,%.2f) enabled=%@",
+                cursor.position.x, cursor.position.y, cursor.position.z,
+                worldPos.x, worldPos.y, worldPos.z,
+                cursor.isEnabled ? "true" : "false"
+            ))
+        }
 
         if let target = result.bubble {
             marker.position = SIMD3<Float>(
