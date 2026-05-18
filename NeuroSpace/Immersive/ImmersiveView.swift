@@ -22,7 +22,7 @@ private struct GazeTargetResult {
     let holdProgress: Float
 }
 
-private enum CalibrationCue: CaseIterable {
+enum CalibrationCue: CaseIterable {
     case right
     case left
     case both
@@ -45,10 +45,10 @@ private enum CalibrationCue: CaseIterable {
 }
 
 struct ImmersiveView: View {
-    @Environment(AppModel.self) private var appModel
-    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(AppModel.self) var appModel
+    @Environment(\.dismissImmersiveSpace) var dismissImmersiveSpace
+    @Environment(\.openWindow) var openWindow
+    @Environment(\.dismissWindow) var dismissWindow
 
     @State private var clickCount: Int = 0
 
@@ -62,58 +62,46 @@ struct ImmersiveView: View {
     @State private var lastSkyboxEnv: EnvironmentChoice? = nil
     @State private var popSoundResource: AudioFileResource? = nil
 
-    // Stage-end dwell tracking — mirrors gazeHoverBubbleID / gazeHoverBeganAt
-    @State private var stageEndDwellTarget: StageEndChoice? = nil
-    @State private var stageEndDwellBeganAt: Date? = nil
-    @State private var stageEndDwellFired: Bool = false
-    @State private var stageEndDwellProgress: Double = 0.0
+    @State var stageEndDwellTarget: StageEndChoice? = nil
+    @State var stageEndDwellBeganAt: Date? = nil
+    @State var stageEndDwellFired: Bool = false
+    @State var stageEndDwellProgress: Double = 0.0
 
     private final class BubbleEntityStore {
         var entities: [UUID: ModelEntity] = [:]
         var lastSeenClickCount: Int = 0
         var lastSeenPopCount: Int = 0
-        /// Frame counter used to throttle the per-frame cursor diagnostics.
-        var cursorDebugFrame: Int = 0
-        /// One-shot flag: true after we've manually pinned worldAnchor.position
-        /// to the user's head pose (because AnchorEntity(.head, .once) doesn't
-        /// reliably latch in current visionOS).
+        // AnchorEntity(.head, .once) doesn't reliably latch in current
+        // visionOS, so we pin worldAnchor.position manually on the first
+        // tracked device anchor and gate that with this flag.
         var headAnchorLocked: Bool = false
         weak var worldAnchor: AnchorEntity?
         weak var armsAnchor: AnchorEntity?
         weak var backgroundPlane: Entity?
         weak var gazeCursor: ModelEntity?
         weak var holdMarker: ModelEntity?
-        // Stage-end option spheres
         weak var stageEndRoot: Entity?
         var stageEndSpheres: [String: ModelEntity] = [:]
         let arSession = ARKitSession()
         let worldTracking = WorldTrackingProvider()
         var arSessionStarted = false
-        // Smoothed cursor position for exponential interpolation
         var smoothedCursorPosition: SIMD3<Float>? = nil
     }
 
-    /// Root content offset relative to the head anchor at session start.
-    /// Y = -0.11 m compensates for the bubble Y-range bias (-0.08 ... 0.30,
-    /// midpoint ≈ +0.11) so spawned bubbles and the centred UI panels sit
-    /// at the user's actual eye level instead of above it. Z = -1.0 m
-    /// anchors the play space one metre in front of the user.
+    // Y = -0.11 cancels the bubble yRange midpoint (+0.11) so spawns land
+    // at eye level. Z = -1.0 puts the play space 1 m in front of the user.
     private let worldAnchorOffset = SIMD3<Float>(0, -0.11, -1.0)
     @State private var bubbleStore = BubbleEntityStore()
 
-    // How close (metres) the head ray must pass to a bubble to select it
+    // Metres of perpendicular distance the gaze ray must reach to snap.
     private let gazeSelectRadius: Float = 0.11
     private let gazeDwellDuration: TimeInterval = 0.65
-    /// Longer dwell for stage-end option bubbles — gives the user time to decide.
     private let stageEndDwellDuration: TimeInterval = 5.0
 
     var body: some View {
         RealityView { content, attachments in
-            // We can't rely on AnchorEntity(.head, .once) — in current
-            // visionOS it sometimes never latches, leaving the anchor at the
-            // world origin (the play space ends up on the floor). Instead we
-            // start with a world-fixed anchor and snap its position to the
-            // user's actual head pose once ARKit reports it (see .task loop).
+            // Position is pinned to the user's head in lockHeadAnchorIfNeeded
+            // (.head, .once) doesn't reliably latch in current visionOS).
             let worldAnchor = AnchorEntity(world: .zero)
             worldAnchor.name = "WorldAnchor"
 
@@ -212,24 +200,17 @@ struct ImmersiveView: View {
                 armsAnchor.addChild(progressBar)
             }
 
-            // Result card: world-anchored, sits just above the option bubbles
-            // seRoot is at (-0.03, -0.05, 0.0), spheres radius 0.09 → top ~y=0.04
-            // Place card at y=0.20 so it clears the bubbles with a small gap
             if let result = attachments.entity(for: "resultPanel") {
                 result.name = "ResultPanel"
                 result.position = SIMD3<Float>(-0.03, 0.22, 0.0)
                 root.addChild(result)
             }
 
-            // ── Stage-end option spheres ─────────────────────────────────────────
-            // Three real RealityKit spheres (same material as game bubbles) that
-            // float in the space after a stage ends.  Labels are SwiftUI attachments.
             let seRoot = Entity()
             seRoot.name = "StageEndRoot"
             seRoot.isEnabled = false
 
-            // Sphere configs: (name, colour, x-offset)
-            // Shifted left so "next" doesn't overlap the HUD panel (x=0.34)
+            // Next is shifted right to clear the HUD panel at x=0.34.
             let seConfigs: [(String, UIColor, Float)] = [
                 (StageEndChoice.lobby.rawValue, UIColor(DS.textSecondary).withAlphaComponent(0.9), -0.38),
                 (StageEndChoice.retry.rawValue, UIColor(DS.warning),                               -0.06),
@@ -243,7 +224,6 @@ struct ImmersiveView: View {
                 seRoot.addChild(sphere)
                 bubbleStore.stageEndSpheres[name] = sphere
 
-                // Label attachment sits 0.14 m below the sphere centre
                 if let label = attachments.entity(for: name) {
                     label.name = "Label_\(name)"
                     label.position = SIMD3<Float>(0.0, -0.18, 0.0)
@@ -251,7 +231,6 @@ struct ImmersiveView: View {
                 }
             }
 
-            // Below eye level so bubbles sit under the HUD panel
             seRoot.position = SIMD3<Float>(-0.03, -0.05, 0.0)
             root.addChild(seRoot)
             bubbleStore.stageEndRoot = seRoot
@@ -279,9 +258,7 @@ struct ImmersiveView: View {
             let controller = appModel.gameController
 
             if controller.popCount > bubbleStore.lastSeenPopCount {
-                let prev = bubbleStore.lastSeenPopCount
                 bubbleStore.lastSeenPopCount = controller.popCount
-                print("[PopSound] popCount diff \(prev) → \(controller.popCount), state=\(controller.sessionState.rawValue)")
                 if controller.sessionState == .playing,
                    let resource = popSoundResource,
                    let position = controller.lastPoppedBubblePosition {
@@ -289,7 +266,6 @@ struct ImmersiveView: View {
                 }
             } else if controller.popCount < bubbleStore.lastSeenPopCount {
                 // popCount reset (resetGame) — re-sync without playing a sound
-                print("[PopSound] popCount reset \(bubbleStore.lastSeenPopCount) → \(controller.popCount), resyncing")
                 bubbleStore.lastSeenPopCount = controller.popCount
             }
 
@@ -298,8 +274,6 @@ struct ImmersiveView: View {
             updateArmsRootTransform(armsRoot)
 
             if isCalibrationStage || controller.sessionState == .finished {
-                // Calibrating: not started yet. Finished: stage over.
-                // Either way, clear all game bubbles from the scene.
                 controller.targetedBubbleID = nil
                 gazeHoverBubbleID = nil
                 gazeHoverBeganAt = nil
@@ -309,10 +283,8 @@ struct ImmersiveView: View {
                 )
                 removeAllBubbleEntities(from: root)
             } else {
-                // Cursor position and controller.targetedBubbleID are updated
-                // every frame in updateCursorEveryFrame() via the .task loop,
-                // so they stay live regardless of whether BCI data is active.
-                // syncBubbles needs root (from content) so it stays here.
+                // syncBubbles needs root (from content) so it stays here;
+                // cursor + targetedBubbleID are advanced by the .task loop.
                 syncBubbles(
                     in: root,
                     with: controller.bubbles,
@@ -330,18 +302,15 @@ struct ImmersiveView: View {
                 panel.scale = SIMD3<Float>(repeating: 0.92)
             }
 
-            // Show/hide stage-end spheres and sync which options are available
             if let seRoot = root.findEntity(named: "StageEndRoot") {
                 let show = appModel.showStageEndBubbles
                 seRoot.isEnabled = show
 
                 if show {
                     let passed = controller.finishReason == .allPopped && controller.meetsUnlockCriteria
-                    // Hide "Next" sphere when stage was failed
                     if let nextSphere = seRoot.findEntity(named: StageEndChoice.next.rawValue) {
                         nextSphere.isEnabled = passed
                     }
-                    // Brighten whichever sphere is currently being dwelled on
                     for choice in [StageEndChoice.lobby, .retry, .next] {
                         if let sphere = seRoot.findEntity(named: choice.rawValue) as? ModelEntity {
                             let isTarget = stageEndDwellTarget == choice
@@ -372,7 +341,6 @@ struct ImmersiveView: View {
                     .environment(appModel)
             }
 
-            // Result card — head-tracked attachment above the bubbles
             Attachment(id: "resultPanel") {
                 switch appModel.stageEndResult {
                 case .passed:
@@ -386,7 +354,6 @@ struct ImmersiveView: View {
                 }
             }
 
-            // Stage-end pill labels — one per sphere, with live dwell countdown
             Attachment(id: StageEndChoice.lobby.rawValue) {
                 StageEndLabel(
                     text: "Lobby",
@@ -431,7 +398,6 @@ struct ImmersiveView: View {
                         return
                     }
 
-                    // Stage-end option tapped (fallback for direct pinch/tap)
                     if name.hasPrefix("StageEnd_"),
                        appModel.showStageEndBubbles,
                        let choice = StageEndChoice(rawValue: name) {
@@ -462,22 +428,20 @@ struct ImmersiveView: View {
                 dismissWindow(id: appModel.congratsWindowID)
                 dismissWindow(id: appModel.missionFailedWindowID)
 
-                // Show the in-world bubble menu — it replaces the flat windows
-                // when the player is inside the immersive space.
                 if appModel.immersiveSpaceState == .open {
+                    // In-immersive: head-tracked sphere menu replaces the windows.
                     stageEndDwellTarget = nil
                     stageEndDwellBeganAt = nil
                     stageEndDwellFired = false
                     stageEndDwellProgress = 0.0
                     appModel.showStageEndBubbles = true
 
-                    // Show result as a head-tracked attachment — no floating window
                     switch appModel.gameController.finishReason {
                     case .allPopped: appModel.stageEndResult = .passed
                     default:         appModel.stageEndResult = .failed
                     }
                 } else {
-                    // Fallback: open the flat window if not in immersive
+                    // Flat-window fallback when not in immersive.
                     switch appModel.gameController.finishReason {
                     case .allPopped:
                         openWindow(id: appModel.congratsWindowID)
@@ -547,20 +511,11 @@ struct ImmersiveView: View {
 
     // MARK: - Head-Ray Targeting
     //
-    // This is the programmatic targeting system. It fires a ray from the head
-    // pose and selects the nearest bubble within gazeSelectRadius.
-    //
-    // Visual targeting (what the user *sees* highlighted) is handled separately
-    // by HoverEffectComponent on each bubble — the system uses real eye tracking
-    // for that rendering without telling us which entity is lit.
-    //
-    // The two systems work together:
-    //   HoverEffectComponent → shows the user which bubble is "aimed at" (eye-accurate)
-    //   Head ray             → tells the game which bubble is targeted for BCI logic
+    // Programmatic targeting via head pose; HoverEffectComponent renders the
+    // separate eye-tracked highlight that the system doesn't expose to us.
 
     private func currentHeadRayTargetResult(from bubbles: [Bubble]) -> GazeTargetResult {
         guard let ray = currentHeadRayInRootSpace() else {
-            // No device anchor — fall back to the most central bubble
             let fallback = bestCentralBubble(from: bubbles)
             let pos = fallback?.position ?? SIMD3<Float>(0, 0.08, 0.02)
             return updateHoverState(bubble: fallback, cursorPosition: smoothCursor(pos))
@@ -602,9 +557,6 @@ struct ImmersiveView: View {
         }
     }
 
-    /// Snaps the world anchor to the user's actual head position the first
-    /// time ARKit reports a tracked device anchor. Compensates for visionOS
-    /// occasionally never latching AnchorEntity(.head, .once).
     @MainActor
     private func lockHeadAnchorIfNeeded() {
         guard !bubbleStore.headAnchorLocked,
@@ -617,24 +569,13 @@ struct ImmersiveView: View {
         let headPos = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
         anchor.position = headPos
         bubbleStore.headAnchorLocked = true
-        print(String(
-            format: "[Anchor] head-locked at (%.2f, %.2f, %.2f)",
-            headPos.x, headPos.y, headPos.z
-        ))
     }
 
-    /// Returns a ray from the head centre in the head-forward direction.
-    /// The cursor follows this ray; HoverEffectComponent uses real eye tracking.
     private func currentHeadRayInRootSpace() -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
         guard let deviceAnchor = bubbleStore.worldTracking.queryDeviceAnchor(
             atTimestamp: CACurrentMediaTime()
-        ) else {
-            print("[Cursor] queryDeviceAnchor nil — head not yet tracked")
-            return nil
-        }
-        guard let anchor = bubbleStore.worldAnchor,
-              let root = anchor.findEntity(named: "Root") else {
-            print("[Cursor] worldAnchor or Root entity missing")
+        ) else { return nil }
+        guard let root = bubbleStore.worldAnchor?.findEntity(named: "Root") else {
             return nil
         }
 
@@ -642,30 +583,15 @@ struct ImmersiveView: View {
         let worldOrigin = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
         let worldForward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
 
-        // Convert into root-local coordinates. The world anchor is now a head
-        // anchor (.once) whose runtime world position depends on where the
-        // user was at session start, so we can't subtract a fixed offset —
-        // let RealityKit do the transform.
+        // The world anchor's runtime position is set by lockHeadAnchorIfNeeded
+        // at session start (since AnchorEntity(.head, .once) doesn't reliably
+        // latch in current visionOS), so use RealityKit's transform-aware
+        // conversion rather than a hand-rolled subtraction.
         let rootOrigin = root.convert(position: worldOrigin, from: nil)
         let rootForward = root.convert(direction: worldForward, from: nil)
-        // One-shot diagnostics: throttle to avoid spamming the console.
-        bubbleStore.cursorDebugFrame += 1
-        if bubbleStore.cursorDebugFrame % 60 == 0 {
-            let anchorWorld = anchor.position(relativeTo: nil)
-            let rootWorld = root.position(relativeTo: nil)
-            print(String(
-                format: "[Cursor] anchor=(%.2f,%.2f,%.2f) rootWorld=(%.2f,%.2f,%.2f) headWorld=(%.2f,%.2f,%.2f) rootOrigin=(%.2f,%.2f,%.2f) rootFwd=(%.2f,%.2f,%.2f)",
-                anchorWorld.x, anchorWorld.y, anchorWorld.z,
-                rootWorld.x, rootWorld.y, rootWorld.z,
-                worldOrigin.x, worldOrigin.y, worldOrigin.z,
-                rootOrigin.x, rootOrigin.y, rootOrigin.z,
-                rootForward.x, rootForward.y, rootForward.z
-            ))
-        }
         return (rootOrigin, simd_normalize(rootForward))
     }
 
-    /// Exponential moving average — smooths cursor movement so it doesn't snap.
     private let cursorSmoothAlpha: Float = 0.20
 
     private func smoothCursor(_ newPos: SIMD3<Float>) -> SIMD3<Float> {
@@ -1093,33 +1019,16 @@ struct ImmersiveView: View {
         isVisible: Bool
     ) {
         guard let cursor = bubbleStore.gazeCursor,
-              let marker = bubbleStore.holdMarker else {
-            if bubbleStore.cursorDebugFrame % 60 == 0 {
-                print("[Cursor] gazeCursor/holdMarker entity missing")
-            }
-            return
-        }
+              let marker = bubbleStore.holdMarker else { return }
 
         guard isVisible, let result else {
             cursor.isEnabled = false
             marker.isEnabled = false
-            if bubbleStore.cursorDebugFrame % 60 == 0 {
-                print("[Cursor] hidden — isVisible=\(isVisible) result=\(result == nil ? "nil" : "set")")
-            }
             return
         }
 
         cursor.position = result.cursorPosition
         cursor.isEnabled = true
-        if bubbleStore.cursorDebugFrame % 60 == 0 {
-            let worldPos = cursor.position(relativeTo: nil)
-            print(String(
-                format: "[Cursor] local=(%.2f,%.2f,%.2f) world=(%.2f,%.2f,%.2f) enabled=%@",
-                cursor.position.x, cursor.position.y, cursor.position.z,
-                worldPos.x, worldPos.y, worldPos.z,
-                cursor.isEnabled ? "true" : "false"
-            ))
-        }
 
         if let target = result.bubble {
             marker.position = SIMD3<Float>(
@@ -1168,15 +1077,8 @@ struct ImmersiveView: View {
         bubbleStore.entities.removeAll()
     }
 
-    /// Spawn a transient spatial-audio entity at the popped-bubble position,
-    /// play the pop sound, and clean up shortly after.
     @MainActor
     private func playPopSound(at position: SIMD3<Float>, parent: Entity, resource: AudioFileResource) {
-        let id = UUID().uuidString.prefix(8)
-        let t = CACurrentMediaTime()
-        let activeBefore = parent.children.filter { $0.name == "PopSound" }.count
-        print("[PopSound] play id=\(id) pos=(\(position.x),\(position.y),\(position.z)) t=\(String(format: "%.3f", t)) activeBefore=\(activeBefore)")
-
         let audioEntity = Entity()
         audioEntity.name = "PopSound"
         audioEntity.position = position
@@ -1187,141 +1089,8 @@ struct ImmersiveView: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             audioEntity.removeFromParent()
-            print("[PopSound] cleanup id=\(id) t=\(String(format: "%.3f", CACurrentMediaTime()))")
         }
     }
 }
 
-// MARK: - Stage-end sphere helpers
 
-extension ImmersiveView {
-
-    /// Creates a RealityKit sphere entity styled like a game bubble.
-    func makeStageEndSphere(color: UIColor) -> ModelEntity {
-        let radius: Float = 0.09
-        let entity = ModelEntity(
-            mesh: .generateSphere(radius: radius),
-            materials: [makeStageEndMaterial(color: color, highlighted: false)]
-        )
-        entity.components.set(CollisionComponent(shapes: [.generateSphere(radius: radius)]))
-        entity.components.set(InputTargetComponent())
-        entity.components.set(HoverEffectComponent(
-            .highlight(HoverEffectComponent.HighlightHoverEffectStyle(
-                color: .init(color),
-                strength: 2.0
-            ))
-        ))
-        return entity
-    }
-
-    /// Physically-based material identical to game bubbles.
-    func makeStageEndMaterial(color: UIColor, highlighted: Bool) -> PhysicallyBasedMaterial {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor       = .init(tint: color.withAlphaComponent(highlighted ? 0.55 : 0.30))
-        m.roughness       = .init(floatLiteral: 0.05)
-        m.metallic        = .init(floatLiteral: 0.0)
-        m.blending        = .transparent(opacity: .init(floatLiteral: 0.45))
-        m.clearcoat       = .init(floatLiteral: 1.0)
-        m.clearcoatRoughness = .init(floatLiteral: 0.0)
-        m.emissiveColor   = .init(color: color)
-        m.emissiveIntensity = highlighted ? 5.0 : 1.8
-        return m
-    }
-
-    /// Routes a confirmed stage-end choice (from dwell or direct tap) to the
-    /// appropriate navigation action, mirroring CongratsView / MissionFailedView.
-    @MainActor
-    func handleStageEndChoice(_ choice: StageEndChoice) {
-        // Reset dwell state immediately so the handler only fires once
-        stageEndDwellTarget = nil
-        stageEndDwellBeganAt = nil
-
-        Task { @MainActor in
-            appModel.showStageEndBubbles = false
-            appModel.stageEndResult = .none
-            stageEndDwellFired = false
-            dismissWindow(id: appModel.congratsWindowID)
-            dismissWindow(id: appModel.missionFailedWindowID)
-
-            let controller = appModel.gameController
-
-            switch choice {
-
-            case .lobby:
-                appModel.saveSessionRecord()
-                controller.resetGame()
-                if appModel.immersiveSpaceState == .open {
-                    appModel.immersiveSpaceState = .inTransition
-                    await dismissImmersiveSpace()
-                    appModel.immersiveSpaceState = .closed
-                }
-                openWindow(id: appModel.mainWindowID)
-
-            case .retry:
-                controller.resetGame(keepStage: true)
-                if appModel.immersiveSpaceState == .open {
-                    controller.startSession()
-                    dismissWindow(id: appModel.mainWindowID)
-                }
-
-            case .next:
-                guard controller.canAdvanceStage else { return }
-                controller.advanceStage()
-                if appModel.immersiveSpaceState == .open {
-                    controller.startSession()
-                    dismissWindow(id: appModel.mainWindowID)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Immersive Calibration Panel
-
-private struct ImmersiveCalibrationPanel: View {
-    let cue: CalibrationCue
-
-    private var cueIndex: Int {
-        CalibrationCue.allCases.firstIndex(of: cue) ?? 0
-    }
-
-    var body: some View {
-        VStack(spacing: 18) {
-            Text("Calibration")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .textCase(.uppercase)
-                .foregroundStyle(.secondary)
-
-            VStack(spacing: 10) {
-                Text(cue.title)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                Text(cue.prompt)
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: 8) {
-                ForEach(CalibrationCue.allCases.indices, id: \.self) { index in
-                    Capsule()
-                        .fill(index == cueIndex ? Color.green : Color.secondary.opacity(0.30))
-                        .frame(width: index == cueIndex ? 28 : 9, height: 9)
-                }
-            }
-            .frame(height: 12)
-
-            Text("Keep your body still and focus only on the imagined movement.")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 26)
-        .frame(width: 420)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
-    }
-}

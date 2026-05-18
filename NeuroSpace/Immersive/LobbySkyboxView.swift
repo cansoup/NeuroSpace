@@ -6,12 +6,9 @@ struct LobbySkyboxView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        // The make closure creates a single named anchor and runs the initial
-        // build. The update closure finds that anchor by name and kicks off a
-        // Task to rebuild its children. We capture the Entity reference (a
-        // class) inside the Task — never the `inout content` — which avoids
-        // the "Escaping closure captures 'inout' parameter" error and ensures
-        // env switches actually re-render the skybox.
+        // The update closure captures the Entity, not the inout content,
+        // so env switches re-render without an "Escaping closure captures
+        // 'inout' parameter" error.
         RealityView { content in
             let anchor = AnchorEntity(world: .zero)
             anchor.name = "SkyboxAnchor"
@@ -31,9 +28,6 @@ struct LobbySkyboxView: View {
 
 // MARK: - Shared skybox builder
 
-/// Builds and swaps the skybox entity tree for an `EnvironmentChoice` under a
-/// given anchor. Shared between the lobby skybox preview and the in-game
-/// immersive scene so both screens render the same environment.
 enum SkyboxBuilder {
     @MainActor
     static func rebuild(anchor: Entity, for env: EnvironmentChoice) async {
@@ -49,19 +43,15 @@ enum SkyboxBuilder {
             if let sphere = await makeHDRSkybox(named: env.hdrAssetName ?? "") {
                 anchor.addChild(sphere)
             } else {
-                // Fallback when the HDR asset isn't bundled yet — show a
-                // gradient sphere using the swatch colors so the picker still
-                // visibly switches.
+                // Gradient fallback when the HDR asset isn't bundled.
                 anchor.addChild(makeFallbackSky(for: env))
             }
 
         case .none:
-            // Render no skybox content — a dark, empty space.
             break
 
         case .passthrough:
-            // Render no skybox content. Note: true passthrough requires
-            // .mixed immersion style, set on the ImmersiveSpace in the App.
+            // True passthrough needs .mixed immersion style, set in the App.
             break
         }
     }
@@ -131,8 +121,7 @@ enum SkyboxBuilder {
         return model
     }
 
-    /// Tries the Reality Composer Pro package bundle first (where rkassets
-    /// live), then the main app bundle as a fallback.
+    // RealityKitContent package bundle holds .rkassets; main bundle is the fallback.
     private static func loadTexture(named name: String) async -> TextureResource? {
         do {
             let texture = try await TextureResource(named: name, in: realityKitContentBundle)

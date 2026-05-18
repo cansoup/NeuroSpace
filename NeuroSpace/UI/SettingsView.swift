@@ -453,7 +453,7 @@ private struct DebugPanel: View {
                     debugLine("Active Arm", controller.activeArm.rawValue.capitalized)
                     debugLine("Score", "\(controller.score)")
                     debugLine("Stage", "\(controller.currentStage)/\(StageConfig.totalStages)")
-                    debugLine("EEG", controller.connectionState.displayText)
+                    debugLine("EEG", appModel.bciClient.state.displayText)
                 }
             }
 
