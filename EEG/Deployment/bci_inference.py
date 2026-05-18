@@ -247,11 +247,15 @@ def preprocess_epoch(samples: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(normalized).float().unsqueeze(0).unsqueeze(0).to(DEVICE)
 
 
+MIN_SIGNAL_UV = 1.0   # µV — median channel std below this = headset not on head
+
 def _classify_latest(eeg_buffer, model):
     if len(eeg_buffer) < N_WINDOW:
         return None
     recent  = list(eeg_buffer)[-N_WINDOW:]
     samples = np.stack([s for _, s in recent], axis=1)
+    if np.median(samples.std(axis=1)) < MIN_SIGNAL_UV:
+        return "flat", -1, None   # sentinel: signal too weak
     x       = preprocess_epoch(samples)
     with torch.no_grad():
         probs = torch.softmax(model(x), dim=1)[0].cpu().numpy()
@@ -305,29 +309,38 @@ def _continuous_loop(model, eeg_inlet, bridge_q, session_id):
             if result is None:
                 continue
             pred_name, pred_idx, probs = result
+            if pred_idx == -1:
+                print("  [flat signal — headset not on head?]", end="\r", flush=True)
+                recent_preds.clear()
+                continue
             conf = float(probs[pred_idx])
             gate = "ABOVE" if conf >= THRESHOLDS[pred_idx] else "below"
 
             bar = "  ".join(f"{n}={probs[i]:.2f}" for i, n in enumerate(CLASS_NAMES))
             print(f"  [{pred_name:<5} p={conf:.2f} {gate}]  {bar}", end="\r", flush=True)
 
-            recent_preds.append((pred_idx, conf))
-            if (len(recent_preds) == DEBOUNCE_COUNT
-                    and now - last_fire_time >= COOLDOWN):
-                idxs  = [p[0] for p in recent_preds]
-                confs = [p[1] for p in recent_preds]
-                if len(set(idxs)) == 1 and min(confs) >= THRESHOLDS[idxs[0]]:
-                    last_fire_time = now
-                    fired += 1
-                    recent_preds.clear()
-                    print(f"\n[FIRE #{fired}] {pred_name.upper()}  p={conf:.2f}  -> sent to visionOS\n")
-                    if bridge_q is not None:
-                        try:
-                            bridge_q.put_nowait(
-                                _make_bridge_msg(pred_name, pred_idx, probs, session_id)
-                            )
-                        except queue.Full:
-                            pass
+            in_cooldown = (now - last_fire_time) < COOLDOWN
+            if in_cooldown:
+                remaining = COOLDOWN - (now - last_fire_time)
+                print(f"  [cooldown {remaining:.1f}s]", end="\r", flush=True)
+                recent_preds.clear()
+            else:
+                recent_preds.append((pred_idx, conf))
+                if (len(recent_preds) == DEBOUNCE_COUNT):
+                    idxs  = [p[0] for p in recent_preds]
+                    confs = [p[1] for p in recent_preds]
+                    if len(set(idxs)) == 1 and min(confs) >= THRESHOLDS[idxs[0]]:
+                        last_fire_time = now
+                        fired += 1
+                        recent_preds.clear()
+                        print(f"\n[FIRE #{fired}] {pred_name.upper()}  p={conf:.2f}  -> sent to visionOS\n")
+                        if bridge_q is not None:
+                            try:
+                                bridge_q.put_nowait(
+                                    _make_bridge_msg(pred_name, pred_idx, probs, session_id)
+                                )
+                            except queue.Full:
+                                pass
 
             time.sleep(POLL_SLEEP)
 

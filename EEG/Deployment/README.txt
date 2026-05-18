@@ -34,7 +34,7 @@ WINDOWS MACHINE — ON THE DAY
 
 4. Double-click START.bat
    Wait until you see:
-      Continuous mode | threshold=0.75 ...
+      Continuous mode  |  thresholds left=0.6 right=0.75 both=0.45 ...
    The script is now running.
 
 
@@ -58,8 +58,9 @@ Once everything is connected:
   - Imagine "right hand" for about 4 seconds -> RIGHT command fires
   - Imagine "both hands" for about 4 seconds -> BOTH  command fires
 
-The model needs to see 75% confidence twice in a row before it fires,
-so low-confidence noise is ignored. After a command fires there is a
+Each class has its own confidence threshold (left=60%, right=75%, both=45%).
+The same class must win twice in a row above its threshold before the command
+fires, so low-confidence noise is ignored. After a command fires there is a
 3-second pause before the next one can trigger.
 
 The Windows terminal will print:
